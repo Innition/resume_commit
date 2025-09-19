@@ -1271,13 +1271,24 @@ function saveEditRecord() {
     }
 
     // 单岗位编辑模式或没有新增岗位
-    const positionInput = document.querySelector('#positionContainer .position-input');
-    const position = positionInput ? positionInput.value : '';
+    let position = '';
+    const positionListEl = document.getElementById('positionList');
+
+    if (positionListEl) {
+        const byCurrent = positionListEl.querySelector('.position-input[data-current="true"]');
+        const byId = positionListEl.querySelector(`.position-item[data-position-id="${recordId}"] .position-input`);
+        const input = byCurrent || byId;
+        position = input ? input.value.trim() : '';
+    } else {
+        const input = document.querySelector('#positionContainer .position-input');
+        position = input ? input.value.trim() : '';
+    }
 
     if (!position) {
         alert('请选择或输入岗位名称');
         return;
     }
+
 
     const recordData = {
         id: recordId,
@@ -1904,18 +1915,18 @@ function showPositionSelector(positions, currentPositionId) {
                         <input type="text" class="form-control position-input" 
                                value="${pos.position}" 
                                placeholder="请输入岗位名称" 
-                               onchange="updatePositionName(${pos.id}, this.value)"
+                               onchange="updatePositionName('${pos.id}', this.value)"
                                ${pos.id == currentPositionId ? 'data-current="true"' : ''}>
                         <div class="input-group-text">
                             <div class="btn-group btn-group-sm" role="group">
                                 <button type="button" class="btn btn-outline-primary btn-sm" 
-                                        onclick="selectPosition(${pos.id})" 
+                                        onclick="selectPosition('${pos.id}')" 
                                         title="选择此岗位进行编辑"
                                         ${pos.id == currentPositionId ? 'disabled' : ''}>
                                     <i class="bi bi-check"></i>
                                 </button>
                                 <button type="button" class="btn btn-outline-danger btn-sm" 
-                                        onclick="removePositionFromEdit(${pos.id})" 
+                                        onclick="removePositionFromEdit('${pos.id}')" 
                                         title="删除此岗位"
                                         ${positions.length <= 1 ? 'disabled' : ''}>
                                     <i class="bi bi-trash"></i>
