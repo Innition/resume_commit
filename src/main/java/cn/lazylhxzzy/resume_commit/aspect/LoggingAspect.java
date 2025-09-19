@@ -67,6 +67,11 @@ public class LoggingAspect {
             long executionTime = System.currentTimeMillis() - startTime;
             logUtil.info(module, methodName, "API调用成功");
             
+            // 记录访问日志
+            logUtil.logAccess(getCurrentUserId(), getCurrentUsername(), ipAddress, userAgent,
+                            requestMethod, requestUrl, requestParams, 200, executionTime,
+                            null, null, null, null);
+            
             // 记录性能日志
             Map<String, Object> metrics = new HashMap<>();
             metrics.put("execution_time", executionTime);
@@ -80,6 +85,11 @@ public class LoggingAspect {
             errorMessage = e.getMessage();
             stackTrace = getStackTrace(e);
             responseCode = 500;
+            
+            // 记录访问日志（错误情况）
+            logUtil.logAccess(getCurrentUserId(), getCurrentUsername(), ipAddress, userAgent,
+                            requestMethod, requestUrl, requestParams, responseCode, executionTime,
+                            null, null, null, null);
             
             logUtil.error(module, methodName, "API_ERROR_001", errorMessage, stackTrace);
             
@@ -261,5 +271,51 @@ public class LoggingAspect {
         }
         
         return sb.toString();
+    }
+    
+    /**
+     * 获取当前用户ID
+     */
+    private Long getCurrentUserId() {
+        try {
+            String username = getCurrentUsername();
+            if (username != null) {
+                // 这里需要注入UserMapper，暂时返回null
+                return null;
+            }
+        } catch (Exception e) {
+            // 忽略异常，返回null
+        }
+        return null;
+    }
+    
+    /**
+     * 获取当前用户名
+     */
+    private String getCurrentUsername() {
+        try {
+            HttpServletRequest request = getCurrentRequest();
+            if (request != null) {
+                String token = getTokenFromRequest(request);
+                if (token != null) {
+                    // 这里需要注入JwtUtil，暂时返回null
+                    return null;
+                }
+            }
+        } catch (Exception e) {
+            // 忽略异常，返回null
+        }
+        return null;
+    }
+    
+    /**
+     * 从请求中获取JWT Token
+     */
+    private String getTokenFromRequest(HttpServletRequest request) {
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+        return null;
     }
 }

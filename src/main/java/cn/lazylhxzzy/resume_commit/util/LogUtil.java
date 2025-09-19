@@ -3,7 +3,6 @@ package cn.lazylhxzzy.resume_commit.util;
 import cn.lazylhxzzy.resume_commit.entity.User;
 import cn.lazylhxzzy.resume_commit.mapper.UserMapper;
 import cn.lazylhxzzy.resume_commit.service.LogService;
-import cn.lazylhxzzy.resume_commit.util.JwtUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -75,6 +74,18 @@ public class LogUtil {
      */
     public void performance(String module, String methodName, Long executionTime, Map<String, Object> metrics) {
         logService.logPerformance(module, methodName, executionTime, null, null, metrics);
+    }
+    
+    /**
+     * 记录访问日志
+     */
+    public void logAccess(Long userId, String username, String ipAddress, String userAgent,
+                         String requestMethod, String requestUrl, String requestParams,
+                         Integer responseCode, Long responseTime, Long requestSize,
+                         Long responseSize, String referer, String sessionId) {
+        logService.logAccess(userId, username, ipAddress, userAgent, requestMethod, requestUrl,
+                           requestParams, responseCode, responseTime, requestSize, responseSize,
+                           referer, sessionId);
     }
     
     /**

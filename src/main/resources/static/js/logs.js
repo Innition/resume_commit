@@ -94,18 +94,25 @@ document.addEventListener('DOMContentLoaded', function() {
             element.value = formatDateTimeLocal(index % 2 === 0 ? startTime : endTime);
         }
     });
-    
-    // 添加选项卡切换事件监听
+
+// Tab 切换后自动刷新对应列表
     setTimeout(() => {
         document.querySelectorAll('[data-bs-toggle="tab"]').forEach(tab => {
-            tab.addEventListener('shown.bs.tab', function(event) {
+            tab.addEventListener('shown.bs.tab', function (event) {
                 const target = event.target.getAttribute('data-bs-target');
-                if (target === '#security') {
-                    // 安全日志选项卡激活时自动查询
-                    loadSecurityLogs(1);
-                } else if (target === '#error') {
-                    // 错误日志选项卡激活时自动查询
-                    loadErrorLogs(1);
+                switch (target) {
+                    case '#system':
+                        loadSystemLogs(1);
+                        break;
+                    case '#access':
+                        loadAccessLogs(1);
+                        break;
+                    case '#security':
+                        loadSecurityLogs(1);
+                        break;
+                    case '#error':
+                        loadErrorLogs(1);
+                        break;
                 }
             });
         });
@@ -320,36 +327,39 @@ function renderSecurityLogs(logs) {
 function renderPagination(containerId, data, currentPage, loadFunction) {
     const container = document.getElementById(containerId);
     container.innerHTML = '';
-    
-    if (data.pages <= 1) return;
-    
+    if (!data || data.pages <= 1) return;
+
     const totalPages = data.pages;
     const startPage = Math.max(1, currentPage - 2);
     const endPage = Math.min(totalPages, currentPage + 2);
-    
+
+    const makeItem = (label, targetPage, disabled = false, active = false) => {
+        const li = document.createElement('li');
+        li.className = `page-item ${disabled ? 'disabled' : ''} ${active ? 'active' : ''}`;
+        const a = document.createElement('a');
+        a.className = 'page-link';
+        a.href = '#';
+        a.textContent = label;
+        if (!disabled) {
+            a.addEventListener('click', (e) => {
+                e.preventDefault();
+                loadFunction(targetPage);
+            });
+        }
+        li.appendChild(a);
+        return li;
+    };
+
     // 上一页
-    if (currentPage > 1) {
-        const prevLi = document.createElement('li');
-        prevLi.className = 'page-item';
-        prevLi.innerHTML = `<a class="page-link" href="#" onclick="loadFunction(${currentPage - 1}); return false;">上一页</a>`;
-        container.appendChild(prevLi);
-    }
-    
+    container.appendChild(makeItem('上一页', currentPage - 1, currentPage <= 1));
+
     // 页码
     for (let i = startPage; i <= endPage; i++) {
-        const li = document.createElement('li');
-        li.className = `page-item ${i === currentPage ? 'active' : ''}`;
-        li.innerHTML = `<a class="page-link" href="#" onclick="loadFunction(${i}); return false;">${i}</a>`;
-        container.appendChild(li);
+        container.appendChild(makeItem(String(i), i, false, i === currentPage));
     }
-    
+
     // 下一页
-    if (currentPage < totalPages) {
-        const nextLi = document.createElement('li');
-        nextLi.className = 'page-item';
-        nextLi.innerHTML = `<a class="page-link" href="#" onclick="loadFunction(${currentPage + 1}); return false;">下一页</a>`;
-        container.appendChild(nextLi);
-    }
+    container.appendChild(makeItem('下一页', currentPage + 1, currentPage >= totalPages));
 }
 
 // 显示日志详情

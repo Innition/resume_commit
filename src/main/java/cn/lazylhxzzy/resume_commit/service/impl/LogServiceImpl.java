@@ -1,9 +1,11 @@
 package cn.lazylhxzzy.resume_commit.service.impl;
 
 import cn.lazylhxzzy.resume_commit.entity.AccessLog;
+import cn.lazylhxzzy.resume_commit.entity.PerformanceLog;
 import cn.lazylhxzzy.resume_commit.entity.SecurityLog;
 import cn.lazylhxzzy.resume_commit.entity.SystemLog;
 import cn.lazylhxzzy.resume_commit.mapper.AccessLogMapper;
+import cn.lazylhxzzy.resume_commit.mapper.PerformanceLogMapper;
 import cn.lazylhxzzy.resume_commit.mapper.SecurityLogMapper;
 import cn.lazylhxzzy.resume_commit.mapper.SystemLogMapper;
 import cn.lazylhxzzy.resume_commit.service.LogService;
@@ -15,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Map;
 
@@ -37,6 +40,9 @@ public class LogServiceImpl implements LogService {
     
     @Autowired
     private SecurityLogMapper securityLogMapper;
+    
+    @Autowired
+    private PerformanceLogMapper performanceLogMapper;
     
     @Autowired
     private ObjectMapper objectMapper;
@@ -161,7 +167,21 @@ public class LogServiceImpl implements LogService {
                                  memoryUsage != null ? memoryUsage / 1024 / 1024 : 0, 
                                  cpuUsage != null ? cpuUsage : 0);
             
-            // 如果执行时间超过阈值，记录到数据库
+            // 创建性能日志记录
+            PerformanceLog performanceLog = new PerformanceLog();
+            performanceLog.setModule(module);
+            performanceLog.setMethodName(methodName);
+            performanceLog.setExecutionTime(executionTime);
+            performanceLog.setMemoryUsage(memoryUsage);
+            performanceLog.setCpuUsage(cpuUsage != null ? BigDecimal.valueOf(cpuUsage) : null);
+            performanceLog.setThreadCount(Thread.activeCount());
+            performanceLog.setAdditionalMetrics(convertToJson(metrics));
+            performanceLog.setCreatedAt(LocalDateTime.now());
+            
+            // 保存到数据库
+            performanceLogMapper.insert(performanceLog);
+            
+            // 如果执行时间超过阈值，同时记录到系统日志
             if (executionTime > 1000) { // 超过1秒
                 logSystem("WARN", "PERFORMANCE", module, methodName, null, null, null, null,
                          null, null, null, null, executionTime, null, null, null, metrics);

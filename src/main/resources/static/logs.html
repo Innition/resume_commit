@@ -46,6 +46,8 @@
             max-height: 200px;
             overflow-y: auto;
         }
+
+
     </style>
 </head>
 <body>
@@ -238,6 +240,10 @@
                             <label class="form-label">开始时间</label>
                             <input type="datetime-local" class="form-control" id="accessStartTime">
                         </div>
+                        <div class="col-md-2">
+                            <label class="form-label">结束时间</label>
+                            <input type="datetime-local" class="form-control" id="accessEndTime">
+                        </div>
                         <div class="col-md-2 d-flex align-items-end">
                             <button class="btn btn-primary me-2" onclick="loadAccessLogs()">
                                 <i class="bi bi-search"></i> 查询
@@ -348,48 +354,47 @@
                     </ul>
                 </nav>
             </div>
-        </div>
 
-        <!-- 错误日志 -->
-        <div class="tab-pane fade" id="error" role="tabpanel">
-            <!-- 错误日志筛选 -->
-            <div class="filter-section">
-                <div class="row">
-                    <div class="col-md-2">
-                        <label class="form-label">模块</label>
-                        <input type="text" class="form-control" id="errorModule" placeholder="模块名称">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">操作</label>
-                        <input type="text" class="form-control" id="errorOperation" placeholder="操作名称">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">用户名</label>
-                        <input type="text" class="form-control" id="errorUsername" placeholder="用户名">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">开始时间</label>
-                        <input type="datetime-local" class="form-control" id="errorStartTime">
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">结束时间</label>
-                        <input type="datetime-local" class="form-control" id="errorEndTime">
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button class="btn btn-primary me-2" onclick="loadErrorLogs(1)">
-                            <i class="bi bi-search"></i> 查询
-                        </button>
-                        <button class="btn btn-outline-secondary" onclick="clearErrorFilters()">
-                            <i class="bi bi-x-circle"></i> 清空
-                        </button>
+            <!-- 错误日志 -->
+            <div class="tab-pane fade" id="error" role="tabpanel">
+                <!-- 错误日志筛选 -->
+                <div class="filter-section">
+                    <div class="row">
+                        <div class="col-md-2">
+                            <label class="form-label">模块</label>
+                            <input type="text" class="form-control" id="errorModule" placeholder="模块名称">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">操作</label>
+                            <input type="text" class="form-control" id="errorOperation" placeholder="操作名称">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">用户名</label>
+                            <input type="text" class="form-control" id="errorUsername" placeholder="用户名">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">开始时间</label>
+                            <input type="datetime-local" class="form-control" id="errorStartTime">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">结束时间</label>
+                            <input type="datetime-local" class="form-control" id="errorEndTime">
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button class="btn btn-primary me-2" onclick="loadErrorLogs(1)">
+                                <i class="bi bi-search"></i> 查询
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="clearErrorFilters()">
+                                <i class="bi bi-x-circle"></i> 清空
+                            </button>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- 错误日志表格 -->
-            <div class="table-responsive">
-                <table class="table table-striped log-table">
-                    <thead>
+                <!-- 错误日志表格 -->
+                <div class="table-responsive">
+                    <table class="table table-striped log-table">
+                        <thead>
                         <tr>
                             <th>时间</th>
                             <th>模块</th>
@@ -399,21 +404,25 @@
                             <th>错误信息</th>
                             <th>操作</th>
                         </tr>
-                    </thead>
-                    <tbody id="errorLogTableBody">
+                        </thead>
+                        <tbody id="errorLogTableBody">
                         <tr>
                             <td colspan="7" class="text-center">加载中...</td>
                         </tr>
-                    </tbody>
-                </table>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- 错误日志分页 -->
+                <nav>
+                    <ul class="pagination justify-content-center" id="errorPagination">
+                    </ul>
+                </nav>
             </div>
 
-            <!-- 错误日志分页 -->
-            <nav>
-                <ul class="pagination justify-content-center" id="errorPagination">
-                </ul>
-            </nav>
         </div>
+
+
 
         <!-- 日志详情模态框 -->
         <div class="modal fade" id="logDetailModal" tabindex="-1">
