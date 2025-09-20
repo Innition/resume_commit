@@ -257,6 +257,7 @@ public class ResumeRecordServiceImpl extends ServiceImpl<ResumeRecordMapper, Res
                     .set("expected_salary_value", recordDTO.getExpectedSalaryValue())
                     .set("remarks", recordDTO.getRemarks())
                     .set("company_group_id", newCompanyGroupId)
+                    .set("is_primary", recordDTO.getIsPrimary())
                     .set("updated_at", LocalDateTime.now());
         
         resumeRecordMapper.update(null, updateWrapper);

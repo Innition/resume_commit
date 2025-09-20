@@ -509,6 +509,8 @@
             text-align: center;
             font-size: 14px;
             font-weight: 500;
+            cursor: pointer;
+            user-select: none;
         }
 
         .record-tab-input {
@@ -565,22 +567,38 @@
         }
 
         .record-form-content {
-            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+            transition: opacity 0.2s ease-in-out;
         }
 
-        .record-form-content.slide-out-left {
-            transform: translateX(-100%);
+        .record-form-content.fade-out {
             opacity: 0;
         }
 
-        .record-form-content.slide-in-right {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-
-        .record-form-content.slide-in-right.active {
-            transform: translateX(0);
+        .record-form-content.fade-in {
             opacity: 1;
+        }
+
+        /* 基本过渡：transform / opacity */
+        .process-item,
+        .records-table tbody tr {
+            transition: transform 300ms ease, opacity 300ms ease, box-shadow 300ms ease;
+            will-change: transform;
+        }
+
+        /* 进入时的初始状态（JS 会先加这个类再下一帧移除） */
+        .anim-enter {
+            transform: translateY(16px);
+            opacity: 0;
+        }
+
+        /* 删除时的淡出 */
+        .anim-leave {
+            position: absolute !important;
+            z-index: 1;
+            pointer-events: none;
+            transform: scale(0.98);
+            opacity: 0;
+            transition: transform 200ms ease, opacity 200ms ease;
         }
 
     </style>

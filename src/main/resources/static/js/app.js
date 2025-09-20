@@ -234,22 +234,27 @@ function loadRecords() {
 // 构建公司组映射
 function buildCompanyGroupMap() {
     currentCompanyGroupMap.clear();
-    
+
     currentRecords.forEach(record => {
         const companyGroupId = record.companyGroupId;
-        
+        console.log(record.companyName, record.position, "isPrimary: ", record.isPrimary);
         if (!currentCompanyGroupMap.has(companyGroupId)) {
             currentCompanyGroupMap.set(companyGroupId, []);
         }
-        
-        // 将record添加到对应公司组
-        currentCompanyGroupMap.get(companyGroupId).push(record);
+
+
+        if(record.isPrimary){
+            currentCompanyGroupMap.get(companyGroupId).splice(0, 0, record);
+        }
+        else{
+            currentCompanyGroupMap.get(companyGroupId).push(record);
+        }
+
     });
-    
-        // 对公司组进行排序
-        sortRecords();
-    
-    console.log('构建公司组映射完成:', currentCompanyGroupMap);
+
+    // 对公司组进行排序
+    sortRecords();
+
 }
 
 // 切换显示模式
@@ -304,10 +309,9 @@ function renderCardView() {
     // 遍历公司组映射，渲染每个公司组的第一个record
     currentCompanyGroupMap.forEach((records, companyGroupId) => {
         if (records.length === 0) return;
-        
+
         // 获取第一个record（最新的）
         const record = records[0];
-        console.log('渲染公司组:', companyGroupId, 'record:', record);
 
         const processItem = document.createElement('div');
         processItem.className = 'process-item';
@@ -346,10 +350,8 @@ function renderCardView() {
 
         // 生成岗位选择器（下拉框形式）
         let positionSelector = '';
-        console.log('生成岗位选择器:', record.companyName, 'records length:', records.length);
 
         if (records.length > 1) {
-            console.log('创建多record选择器，record列表:', records);
             positionSelector = `
                 <div class="process-info-item">
                     <span class="process-info-label">岗位</span>
@@ -464,7 +466,7 @@ function renderListView() {
     // 遍历公司组映射，渲染每个公司组的第一个record
     currentCompanyGroupMap.forEach((records, companyGroupId) => {
         if (records.length === 0) return;
-        
+
         // 获取第一个record（最新的）
         const record = records[0];
 
@@ -619,7 +621,7 @@ function applyFilters() {
         // 关键词筛选
         if (keywords) {
             const keywordArray = keywords.split(/[,，]/).map(k => k.trim()).filter(k => k);
-            const keywordMatch = keywordArray.some(keyword => 
+            const keywordMatch = keywordArray.some(keyword =>
                 record.companyName.toLowerCase().includes(keyword.toLowerCase()) ||
                 record.position.toLowerCase().includes(keyword.toLowerCase()) ||
                 (record.baseLocation && record.baseLocation.toLowerCase().includes(keyword.toLowerCase()))
@@ -657,7 +659,7 @@ function applyFilters() {
             if (record.finalResult !== 'OC' || !record.expectedSalaryType || !record.expectedSalaryValue) {
                 return false;
             }
-            
+
             let salaryValue = 0;
             if (record.expectedSalaryType === '总包') {
                 // 总包：提取数字部分
@@ -674,7 +676,7 @@ function applyFilters() {
                     salaryValue = monthlySalary * months / 12; // 转换为年总包
                 }
             }
-            
+
             if (salaryValue < minSalary) {
                 return false;
             }
@@ -683,17 +685,17 @@ function applyFilters() {
         return true;
     });
 
-                isFiltered = true;
-    
+    isFiltered = true;
+
     // 使用筛选后的数据重新构建公司组映射
     currentRecords = filteredRecords;
     buildCompanyGroupMap();
-                renderRecords();
+    renderRecords();
 
-                // 显示筛选结果数量
-                const resultCount = filteredRecords.length;
+    // 显示筛选结果数量
+    const resultCount = filteredRecords.length;
     const totalCount = allRecords.length;
-                showFilterResult(resultCount, totalCount);
+    showFilterResult(resultCount, totalCount);
 }
 
 // 清空筛选条件
@@ -705,7 +707,7 @@ function clearFilters() {
 
     isFiltered = false;
     filteredRecords = [];
-    
+
     // 恢复原始数据
     currentRecords = [...allRecords];
     buildCompanyGroupMap();
@@ -742,7 +744,6 @@ function hideFilterResult() {
 
 // 生成流程时间线
 function generateTimeline(record) {
-    console.log('生成流程时间线，记录信息:', record);
     const steps = [];
 
     // 如果有当前状态，只显示投递-当前状态
@@ -815,8 +816,6 @@ function generateTimeline(record) {
         `;
     });
 
-    console.log('生成的流程步骤数量:', steps.length, '步骤:', steps);
-    console.log('生成的HTML:', timelineHtml);
     return timelineHtml;
 }
 
@@ -894,22 +893,22 @@ function showAddModal() {
     document.getElementById('clearCurrentStatusBtn').style.display = 'none';
     document.getElementById('monthlySalaryContainer').style.display = 'none';
     document.getElementById('deleteRecordBtn').style.display = 'none';
-    
+
     // 初始化模态框状态
     isModalEditMode = false;
     modalRecords = [];
     currentModalRecordIndex = 0;
-    
+
     // 创建第一个空的record
     const newRecord = createEmptyRecord();
     modalRecords.push(newRecord);
-    
+
     // 渲染标签页
     renderRecordTabs();
-    
+
     // 渲染表单内容
     renderRecordForm();
-    
+
     // 处理各种状态显示
     handleFinalResultChange();
     handleSalaryTypeChange();
@@ -943,20 +942,16 @@ function createEmptyRecord() {
 function renderRecordTabs() {
     const container = document.getElementById('recordTabsContainer');
     container.innerHTML = '';
-    
+
     modalRecords.forEach((record, index) => {
         const tab = document.createElement('div');
         tab.className = `record-tab ${index === currentModalRecordIndex ? 'active' : ''}`;
         tab.onclick = () => switchToRecord(index);
-        
+
         tab.innerHTML = `
-            <span class="record-tab-text" ondblclick="editTabPosition(${index})" style="display: ${record.editing ? 'none' : 'block'}">${record.position || '新记录'}</span>
-            <input type="text" class="record-tab-input" value="${record.position || ''}" 
-                   onblur="saveTabPosition(${index})" onkeypress="handleTabPositionKeypress(event, ${index})"
-                   style="display: ${record.editing ? 'block' : 'none'}">
-            ${modalRecords.length > 1 ? `<button class="record-tab-close" onclick="deleteRecordTab(${index})">&times;</button>` : ''}
+            <span class="record-tab-text">${record.position || '新记录'}</span>
         `;
-        
+
         container.appendChild(tab);
     });
 }
@@ -965,7 +960,7 @@ function renderRecordTabs() {
 function renderRecordForm() {
     const currentRecord = modalRecords[currentModalRecordIndex];
     if (!currentRecord) return;
-    
+
     // 更新表单字段
     document.getElementById('position').value = currentRecord.position || '';
     document.getElementById('baseLocation').value = currentRecord.baseLocation || '';
@@ -979,7 +974,7 @@ function renderRecordForm() {
     document.getElementById('expectedSalaryType').value = currentRecord.expectedSalaryType || '';
     document.getElementById('expectedSalaryValue').value = currentRecord.expectedSalaryValue || '';
     document.getElementById('remarks').value = currentRecord.remarks || '';
-    
+
     // 处理薪资值显示
     if (currentRecord.expectedSalaryType === '月薪' && currentRecord.expectedSalaryValue) {
         const match = currentRecord.expectedSalaryValue.match(/(\d+(?:\.\d+)?)k×(\d+)/);
@@ -993,13 +988,13 @@ function renderRecordForm() {
         document.getElementById('monthlySalary').value = '';
         document.getElementById('monthlyCount').value = '12';
     }
-    
+
     // 渲染面试记录
     renderInterviewRecords(currentRecord.interviews || []);
-    
+
     // 更新recordId
     document.getElementById('recordId').value = currentRecord.id || '';
-    
+
     // 显示/隐藏删除按钮
     document.getElementById('deleteRecordBtn').style.display = modalRecords.length > 1 ? 'block' : 'none';
 }
@@ -1007,38 +1002,37 @@ function renderRecordForm() {
 // 切换到指定record
 function switchToRecord(index) {
     if (index === currentModalRecordIndex) return;
-    
+
     // 保存当前record的数据
     saveCurrentRecordData();
-    
-    // 执行动画切换
+
+    // 执行淡出动画
     const formContent = document.getElementById('recordFormContent');
-    formContent.classList.add('slide-out-left');
-    
+    formContent.classList.add('fade-out');
+
     setTimeout(() => {
         // 更新索引
         currentModalRecordIndex = index;
-        
+
         // 重新渲染标签页和表单
         renderRecordTabs();
         renderRecordForm();
-        
-        // 执行进入动画
-        formContent.classList.remove('slide-out-left');
-        formContent.classList.add('slide-in-right');
-        
+
+        // 执行淡入动画
+        formContent.classList.remove('fade-out');
+        formContent.classList.add('fade-in');
+
         setTimeout(() => {
-            formContent.classList.remove('slide-in-right');
-            formContent.classList.add('active');
-        }, 50);
-    }, 300);
+            formContent.classList.remove('fade-in');
+        }, 200);
+    }, 150);
 }
 
 // 添加新的record标签页
 function addRecordTab() {
     // 保存当前record的数据
     saveCurrentRecordData();
-    
+
     // 创建新record（复制第一个record的除position外的所有字段）
     const newRecord = createEmptyRecord();
     if (modalRecords.length > 0) {
@@ -1049,75 +1043,21 @@ function addRecordTab() {
             }
         });
     }
-    
+
     modalRecords.push(newRecord);
     currentModalRecordIndex = modalRecords.length - 1;
-    
+
     // 重新渲染
     renderRecordTabs();
     renderRecordForm();
 }
 
-// 编辑标签页position
-function editTabPosition(index) {
-    modalRecords[index].editing = true;
-    renderRecordTabs();
-    
-    // 聚焦到输入框
-    setTimeout(() => {
-        const input = document.querySelector(`.record-tab:nth-child(${index + 1}) .record-tab-input`);
-        if (input) {
-            input.focus();
-            input.select();
-        }
-    }, 50);
-}
 
-// 保存标签页position
-function saveTabPosition(index) {
-    const input = document.querySelector(`.record-tab:nth-child(${index + 1}) .record-tab-input`);
-    if (input) {
-        modalRecords[index].position = input.value.trim() || '新记录';
-        modalRecords[index].editing = false;
-        renderRecordTabs();
-    }
-}
-
-// 处理标签页position输入框按键
-function handleTabPositionKeypress(event, index) {
-    if (event.key === 'Enter') {
-        saveTabPosition(index);
-    } else if (event.key === 'Escape') {
-        modalRecords[index].editing = false;
-        renderRecordTabs();
-    }
-}
-
-// 删除record标签页
-function deleteRecordTab(index) {
-    if (modalRecords.length <= 1) {
-        alert('至少需要保留一个记录');
-        return;
-    }
-    
-    if (confirm('确定要删除这个记录吗？')) {
-        modalRecords.splice(index, 1);
-        
-        // 调整当前索引
-        if (currentModalRecordIndex >= index) {
-            currentModalRecordIndex = Math.max(0, currentModalRecordIndex - 1);
-        }
-        
-        // 重新渲染
-        renderRecordTabs();
-        renderRecordForm();
-    }
-}
 
 // 保存当前record的数据到modalRecords
 function saveCurrentRecordData() {
     if (currentModalRecordIndex >= modalRecords.length) return;
-    
+
     const currentRecord = modalRecords[currentModalRecordIndex];
     currentRecord.position = document.getElementById('position').value.trim();
     currentRecord.baseLocation = document.getElementById('baseLocation').value.trim();
@@ -1131,7 +1071,7 @@ function saveCurrentRecordData() {
     currentRecord.expectedSalaryType = document.getElementById('expectedSalaryType').value;
     currentRecord.expectedSalaryValue = getSalaryValue();
     currentRecord.remarks = document.getElementById('remarks').value.trim();
-    
+
     // 收集面试记录
     const interviews = [];
     const interviewElements = document.querySelectorAll('#interviewRecords .row');
@@ -1150,39 +1090,38 @@ function saveCurrentRecordData() {
 
 // 编辑公司组
 function editCompanyGroup(companyGroupId) {
-    console.log('编辑公司组:', companyGroupId);
-    
+
     // 获取公司组的record数组
     const records = currentCompanyGroupMap.get(companyGroupId);
     if (!records || records.length === 0) {
         console.error('未找到公司组记录:', companyGroupId);
         return;
     }
-    
+
     // 设置模态框标题
     document.getElementById('recordModalTitle').textContent = '编辑投递记录';
-    
+
     // 初始化模态框状态
     isModalEditMode = true;
     modalRecords = [...records]; // 复制record数组
     currentModalRecordIndex = 0;
-    
+
     // 设置公司名称和companyGroupId
     document.getElementById('companyName').value = records[0].companyName || '';
     document.getElementById('companyGroupId').value = companyGroupId;
-    
+
     // 渲染标签页和表单
     renderRecordTabs();
     renderRecordForm();
-    
+
     // 处理各种状态显示
     handleFinalResultChange();
     handleSalaryTypeChange();
     handleCurrentStatusChange();
-    
+
     // 显示删除按钮
     document.getElementById('deleteRecordBtn').style.display = 'block';
-    
+
     const modal = new bootstrap.Modal(document.getElementById('recordModal'));
     modal.show();
 }
@@ -1446,7 +1385,6 @@ function clearCurrentStatus() {
                     return response.json();
                 })
                 .then(data => {
-                    console.log('当前状态已清空');
                     // 重新加载记录列表以更新UI
                     loadRecords();
                 })
@@ -1462,14 +1400,14 @@ function clearCurrentStatus() {
 function saveRecord() {
     // 保存当前record的数据
     saveCurrentRecordData();
-    
+
     // 验证必填字段
     const companyName = document.getElementById('companyName').value.trim();
     if (!companyName) {
         alert('请输入公司名称');
         return;
     }
-    
+
     // 验证所有record的position
     for (let i = 0; i < modalRecords.length; i++) {
         if (!modalRecords[i].position.trim()) {
@@ -1477,7 +1415,7 @@ function saveRecord() {
             return;
         }
     }
-    
+
     if (isModalEditMode) {
         // 编辑模式：批量更新
         saveModalRecords();
@@ -1491,12 +1429,12 @@ function saveRecord() {
 async function saveModalRecords() {
     const companyName = document.getElementById('companyName').value.trim();
     const companyGroupId = document.getElementById('companyGroupId').value;
-    
+
     try {
         // 分离有ID的记录（更新）和没有ID的记录（创建）
         const updatePromises = [];
         const createPromises = [];
-        
+
         modalRecords.forEach(record => {
             const recordData = {
                 companyName: companyName,
@@ -1514,7 +1452,7 @@ async function saveModalRecords() {
                 remarks: record.remarks || null,
                 interviews: record.interviews || []
             };
-            
+
             if (record.id) {
                 // 有ID的记录，使用PUT更新
                 recordData.id = record.id;
@@ -1542,11 +1480,11 @@ async function saveModalRecords() {
                 );
             }
         });
-        
+
         // 执行所有更新和创建操作
         const allPromises = [...updatePromises, ...createPromises];
         const responses = await Promise.all(allPromises);
-        
+
         // 检查响应
         for (const response of responses) {
             if (!response.ok) {
@@ -1554,11 +1492,11 @@ async function saveModalRecords() {
                 throw new Error(errorData.message || '保存记录失败');
             }
         }
-        
+
         // 关闭模态框并刷新数据
         bootstrap.Modal.getInstance(document.getElementById('recordModal')).hide();
         loadRecords();
-        
+
     } catch (error) {
         console.error('保存失败:', error);
         alert('保存失败: ' + error.message);
@@ -1568,7 +1506,7 @@ async function saveModalRecords() {
 // 创建模态框中的records（新增模式）
 async function createModalRecords() {
     const companyName = document.getElementById('companyName').value.trim();
-    
+
     try {
         // 准备创建数据
         const createPromises = modalRecords.map(record => {
@@ -1588,7 +1526,7 @@ async function createModalRecords() {
                 remarks: record.remarks || null,
                 interviews: record.interviews || []
             };
-            
+
             return fetch('/records', {
                 method: 'POST',
                 headers: {
@@ -1598,21 +1536,21 @@ async function createModalRecords() {
                 body: JSON.stringify(recordData)
             });
         });
-        
+
         // 执行所有创建
         const responses = await Promise.all(createPromises);
-        
+
         // 检查响应
         for (const response of responses) {
             if (!response.ok) {
                 throw new Error('创建记录失败');
             }
         }
-        
+
         // 关闭模态框并刷新数据
         bootstrap.Modal.getInstance(document.getElementById('recordModal')).hide();
         loadRecords();
-        
+
     } catch (error) {
         console.error('创建失败:', error);
         alert('创建失败，请重试');
@@ -1625,23 +1563,23 @@ function deleteCurrentRecord() {
         alert('至少需要保留一个记录');
         return;
     }
-    
+
     if (confirm('确定要删除当前记录吗？')) {
         const recordToDelete = modalRecords[currentModalRecordIndex];
-        
+
         if (recordToDelete.id) {
             // 如果record有ID，需要从后端删除
             deleteRecordFromBackend(recordToDelete.id);
         }
-        
+
         // 从modalRecords中删除
         modalRecords.splice(currentModalRecordIndex, 1);
-        
+
         // 调整当前索引
         if (currentModalRecordIndex >= modalRecords.length) {
             currentModalRecordIndex = modalRecords.length - 1;
         }
-        
+
         // 重新渲染
         renderRecordTabs();
         renderRecordForm();
@@ -1657,7 +1595,7 @@ async function deleteRecordFromBackend(recordId) {
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
             }
         });
-        
+
         if (!response.ok) {
             throw new Error('删除记录失败');
         }
@@ -1669,15 +1607,14 @@ async function deleteRecordFromBackend(recordId) {
 
 // 保存公司组
 function saveCompanyGroup(companyGroupId) {
-    console.log('保存公司组:', companyGroupId);
-    
+
     // 获取公司组的record数组
     const records = currentCompanyGroupMap.get(companyGroupId);
     if (!records || records.length === 0) {
         console.error('未找到公司组记录:', companyGroupId);
         return;
     }
-    
+
     // 收集表单数据
     const companyName = document.getElementById('companyName').value;
     const baseLocation = document.getElementById('baseLocation').value || null;
@@ -1711,7 +1648,7 @@ function saveCompanyGroup(companyGroupId) {
     const currentRecord = records.find(r => r.id == currentRecordId);
     if (!currentRecord) {
         console.error('未找到当前编辑的record:', currentRecordId);
-            return;
+        return;
     }
 
     // 更新当前record的岗位名称
@@ -1724,13 +1661,13 @@ function saveCompanyGroup(companyGroupId) {
 
     // 准备批量保存的数据
     const updatePromises = records.map(record => {
-    const recordData = {
+        const recordData = {
             id: record.id,
-        companyName: companyName,
+            companyName: companyName,
             position: record.id == currentRecordId ? position : record.position, // 只有当前编辑的record更新岗位名称
             baseLocation: record.id == currentRecordId ? baseLocation : (record.baseLocation || null),
             companyUrl: record.id == currentRecordId ? companyUrl : (record.companyUrl || null),
-        applyTime: applyTime,
+            applyTime: applyTime,
             testTime: record.id == currentRecordId ? testTime : (record.testTime || null),
             writtenExamTime: record.id == currentRecordId ? writtenExamTime : (record.writtenExamTime || null),
             currentStatus: record.id == currentRecordId ? currentStatus : (record.currentStatus || null), // 只有当前编辑的record更新状态
@@ -1743,12 +1680,12 @@ function saveCompanyGroup(companyGroupId) {
         };
 
         return fetch(`${API_BASE}/records/${record.id}`, {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
                 'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify(recordData)
+            },
+            body: JSON.stringify(recordData)
         });
     });
 
@@ -1802,40 +1739,40 @@ function saveEditRecord() {
     // 获取岗位名称
     const positionInput = document.querySelector('#positionContainer .position-input');
     const position = positionInput ? positionInput.value.trim() : '';
-    
+
     if (!position) {
         alert('请输入岗位名称');
         return;
     }
 
 
-        const recordData = {
+    const recordData = {
         id: recordId,
-            companyName: companyName,
+        companyName: companyName,
         position: position,
-            baseLocation: baseLocation,
-            companyUrl: companyUrl,
-            applyTime: applyTime,
-            testTime: testTime,
-            writtenExamTime: writtenExamTime,
-            currentStatus: currentStatus,
-            currentStatusDate: currentStatusDate,
-            finalResult: finalResult,
-            expectedSalaryType: expectedSalaryType,
-            expectedSalaryValue: expectedSalaryValue,
-            remarks: remarks,
-            interviews: interviews
-        };
+        baseLocation: baseLocation,
+        companyUrl: companyUrl,
+        applyTime: applyTime,
+        testTime: testTime,
+        writtenExamTime: writtenExamTime,
+        currentStatus: currentStatus,
+        currentStatusDate: currentStatusDate,
+        finalResult: finalResult,
+        expectedSalaryType: expectedSalaryType,
+        expectedSalaryValue: expectedSalaryValue,
+        remarks: remarks,
+        interviews: interviews
+    };
 
     const token = localStorage.getItem('token');
 
     fetch(`${API_BASE}/records/${recordId}`, {
         method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            },
-            body: JSON.stringify(recordData)
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(recordData)
     })
         .then(response => response.json())
         .then(data => {
@@ -1858,7 +1795,7 @@ function saveEditRecord() {
 function saveNewRecord() {
     const positionInput = document.querySelector('#positionContainer .position-input');
     const position = positionInput ? positionInput.value.trim() : '';
-    
+
     if (!position) {
         alert('请输入岗位名称');
         return;
@@ -1949,16 +1886,16 @@ function deleteCompanyGroup(companyGroupId) {
         console.error('未找到公司组记录:', companyGroupId);
         return;
     }
-    
+
     // 获取第一个record（当前显示的）
     const currentRecord = records[0];
     const companyName = currentRecord.companyName;
-    
+
     if (confirm(`确定要删除公司"${companyName}"的所有记录吗？此操作不可撤销！`)) {
         const token = localStorage.getItem('token');
-        
+
         // 删除所有record
-        const deletePromises = records.map(record => 
+        const deletePromises = records.map(record =>
             fetch(`${API_BASE}/records/${record.id}`, {
                 method: 'DELETE',
                 headers: {
@@ -1966,7 +1903,7 @@ function deleteCompanyGroup(companyGroupId) {
                 }
             })
         );
-        
+
         Promise.all(deletePromises)
             .then(responses => {
                 const allSuccess = responses.every(response => response.ok);
@@ -2311,47 +2248,100 @@ function setPositions(positions) {
 // 用户岗位偏好功能已移除，现在使用公司组映射管理record顺序
 
 // 切换record显示
-function switchPosition(companyGroupId, recordId) {
-    console.log('切换record:', companyGroupId, recordId);
+async function switchPosition(companyGroupId, recordId) {
 
     // 确保recordId是数字类型
     const numericRecordId = parseInt(recordId);
-    
+
     // 获取公司组的record数组
     const records = currentCompanyGroupMap.get(companyGroupId);
     if (!records) {
         console.error('未找到公司组:', companyGroupId);
         return;
     }
-    
+
     // 找到要切换的record
     const targetRecordIndex = records.findIndex(r => r.id === numericRecordId);
+
     if (targetRecordIndex === -1) {
         console.error('未找到record:', numericRecordId);
         return;
     }
-    
+    // 将选中record的isPrimary属性设置为true
+    records.forEach(record => {
+        record.isPrimary = targetRecordIndex === records.indexOf(record);
+    })
     // 将选中的record移到数组最前面
-    const targetRecord = records.splice(targetRecordIndex, 1)[0];
-    records.unshift(targetRecord);
-    
-    console.log('调整后的record顺序:', records.map(r => ({id: r.id, position: r.position})));
+    const targetRecordList = records.splice(targetRecordIndex, 1)[0];
+    records.unshift(targetRecordList);
 
-    // 重新渲染记录
-    renderRecords();
+
+    try {
+        let updatePromises = [];
+        records.forEach(record => {
+            const recordData = {
+                companyName: record.companyName,
+                position: record.position,
+                baseLocation: record.baseLocation || null,
+                companyUrl: record.companyUrl || null,
+                applyTime: record.applyTime,
+                testTime: record.testTime || null,
+                writtenExamTime: record.writtenExamTime || null,
+                currentStatus: record.currentStatus || null,
+                currentStatusDate: record.currentStatusDate || null,
+                finalResult: record.finalResult,
+                expectedSalaryType: record.expectedSalaryType || null,
+                expectedSalaryValue: record.expectedSalaryValue || null,
+                remarks: record.remarks || null,
+                interviews: record.interviews || [],
+                isPrimary: record.isPrimary
+            };
+
+            // 有ID的记录，使用PUT更新
+            recordData.id = record.id;
+            updatePromises.push(
+                fetch(`/records/${record.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify(recordData)
+                })
+            );
+        });
+
+        // 执行所有更新和创建操作
+        const responses = await Promise.all(updatePromises);
+
+        // 检查响应
+        for (const response of responses) {
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || '保存记录失败');
+            }
+        }
+        // 重新渲染记录
+        buildCompanyGroupMap();
+        renderRecords();
+    }catch (error) {
+        console.error('保存失败:', error);
+        alert('保存失败: ' + error.message);
+    }
+
 }
 
 // 显示岗位选择下拉框（编辑模式）
 function showPositionSelectorForEdit(companyGroupId, currentRecord) {
     const container = document.getElementById('positionContainer');
-    
+
     // 获取公司组的所有record
     const records = currentCompanyGroupMap.get(companyGroupId);
     if (!records || records.length === 0) {
         console.error('未找到公司组记录:', companyGroupId);
         return;
     }
-    
+
     // 显示当前岗位输入框
     container.innerHTML = `
         <div class="input-group mb-2">
@@ -2364,7 +2354,7 @@ function showPositionSelectorForEdit(companyGroupId, currentRecord) {
             </button>
         </div>
     `;
-    
+
     // 如果有多个record，显示选择器
     if (records.length > 1) {
         const selectorHtml = `
@@ -2390,7 +2380,7 @@ function showPositionSelectorForEdit(companyGroupId, currentRecord) {
 // 切换到其他岗位
 function switchToOtherPosition(recordId) {
     if (!recordId) return;
-    
+
     // 获取公司组ID
     const companyGroupIdElement = document.getElementById('companyGroupId');
     const companyGroupId = companyGroupIdElement ? companyGroupIdElement.value : null;
@@ -2419,7 +2409,7 @@ function switchToOtherPosition(recordId) {
         const targetRecord = records.splice(targetIndex, 1)[0];
         records.unshift(targetRecord);
     }
-    
+
     // 重新加载编辑界面
     editRecordWithCompanyGroup(companyGroupId, targetRecord);
 }
@@ -2430,7 +2420,7 @@ function switchToOtherPosition(recordId) {
 function applySorting() {
     const sortSelect = document.getElementById('sortSelect');
     currentSortType = sortSelect.value;
-    
+
     // 重新构建公司组映射并排序
     buildCompanyGroupMap();
     renderRecords();
@@ -2511,3 +2501,77 @@ function sortByCreatedTime(a, b) {
     return timeB - timeA;
 }
 
+function animateReorder(container, {
+    keyOf,           // (el) => string  从子节点取 key（这里用 data-key）
+    build,           // () => void      把“期望最终状态”的 DOM 放进 container（尽量复用旧节点）
+    onEnter,         // (el) => void    新增节点入场初始化（可选）
+    onLeave          // (el) => Promise 可返回一个 Promise 完成后再移除（可选）
+}) {
+    const oldChildren = Array.from(container.children);
+    const oldRects = new Map();
+    const oldMap = new Map();
+
+    oldChildren.forEach(el => {
+        const key = keyOf(el);
+        if (!key) return;
+        oldMap.set(key, el);
+        oldRects.set(key, el.getBoundingClientRect());
+    });
+
+    // 标记老孩子都“未使用”
+    const usedOld = new Set();
+
+    // === 构建新状态（尽量复用旧节点） ===
+    const frag = document.createDocumentFragment();
+    build({ reuse: (key, createEl) => {
+            let el = oldMap.get(key);
+            if (el) { usedOld.add(key); }
+            else { el = createEl(); if (onEnter) onEnter(el); }
+            el.dataset.key = key;
+            frag.appendChild(el);
+            return el;
+        }});
+
+    // 找出要删除的旧节点
+    const toRemove = oldChildren.filter(el => !usedOld.has(keyOf(el)));
+
+    // 先把新 DOM 塞回容器（进入“Last”阶段）
+    container.innerHTML = '';
+    container.appendChild(frag);
+
+    // 计算位移
+    const newChildren = Array.from(container.children);
+    const invertOps = [];
+    newChildren.forEach(el => {
+        const key = keyOf(el);
+        const last = el.getBoundingClientRect();
+        const first = oldRects.get(key);
+        if (first) {
+            const dx = first.left - last.left;
+            const dy = first.top - last.top;
+            if (dx || dy) {
+                el.style.transform = `translate(${dx}px, ${dy}px)`;
+            }
+        }
+    });
+
+    // 强制一次 reflow
+    container.offsetWidth; // eslint-disable-line no-unused-expressions
+
+    // 播放
+    newChildren.forEach(el => {
+        el.style.transform = '';
+        el.style.opacity = '';
+    });
+
+    // 删除的做淡出后移除
+    toRemove.forEach(el => {
+        el.classList.add('anim-leave');
+        const removeNow = () => el.remove();
+        if (onLeave) {
+            onLeave(el)?.finally(removeNow);
+        } else {
+            setTimeout(removeNow, 220);
+        }
+    });
+}
