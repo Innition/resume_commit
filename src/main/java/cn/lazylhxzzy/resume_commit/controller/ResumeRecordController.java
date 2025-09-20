@@ -1,10 +1,13 @@
 package cn.lazylhxzzy.resume_commit.controller;
 
 import cn.lazylhxzzy.resume_commit.dto.ResumeRecordDTO;
+import cn.lazylhxzzy.resume_commit.entity.ResumeRecord;
 import cn.lazylhxzzy.resume_commit.entity.User;
 import cn.lazylhxzzy.resume_commit.mapper.UserMapper;
 import cn.lazylhxzzy.resume_commit.service.ResumeRecordService;
+import cn.lazylhxzzy.resume_commit.service.impl.ResumeRecordServiceImpl;
 import cn.lazylhxzzy.resume_commit.util.JwtUtil;
+import lombok.extern.slf4j.Slf4j;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,6 +31,7 @@ import java.io.InputStream;
 @RestController
 @RequestMapping("/records")
 @CrossOrigin(origins = "*")
+@Slf4j
 public class ResumeRecordController {
     
     @Autowired
@@ -296,6 +300,43 @@ public class ResumeRecordController {
             return new ResponseEntity<>(excelData, headers, HttpStatus.OK);
         } catch (Exception e) {
             return ResponseEntity.badRequest().build();
+        }
+    }
+    
+    @Operation(summary = "获取同一公司的其他岗位记录", description = "获取同一公司的其他岗位记录，用于编辑时的岗位选择")
+    @GetMapping("/company-others/{id}")
+    public ResponseEntity<Map<String, Object>> getCompanyOtherRecords(@PathVariable Long id,
+                                                                     @RequestHeader("Authorization") String token) {
+        try {
+            // 验证token并获取用户信息
+            String username = jwtUtil.getUsernameFromToken(token.substring(7));
+            QueryWrapper<User> userQuery = new QueryWrapper<>();
+            userQuery.eq("username", username);
+            User user = userMapper.selectOne(userQuery);
+            if (user == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Map.of("success", false, "message", "用户不存在"));
+            }
+            
+            // 先获取当前记录以获取公司名称
+            ResumeRecord currentRecord = resumeRecordService.getById(id);
+            if (currentRecord == null || !currentRecord.getUserId().equals(user.getId())) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(Map.of("success", false, "message", "记录不存在"));
+            }
+            
+            // 获取同一公司的其他岗位记录
+            List<ResumeRecordDTO> otherRecords = ((ResumeRecordServiceImpl) resumeRecordService)
+                    .getCompanyOtherRecords(id, currentRecord.getCompanyName(), user.getId());
+            
+            return ResponseEntity.ok(Map.of(
+                    "success", true,
+                    "data", otherRecords
+            ));
+        } catch (Exception e) {
+            log.error("获取同公司其他岗位记录失败", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("success", false, "message", "获取记录失败: " + e.getMessage()));
         }
     }
     

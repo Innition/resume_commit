@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>cn.lazylhxzzy</groupId>
 	<artifactId>resume_commit</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.0.2-BETA</version>
 	<name>resume_commit</name>
 	<description>resume_commit</description>
 	<url/>

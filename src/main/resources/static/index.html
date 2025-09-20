@@ -455,6 +455,134 @@
             opacity: 0.6;
         }
 
+        /* 标签页样式 */
+        .record-tabs {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 20px;
+            padding: 8px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        .record-tabs-container {
+            display: flex;
+            gap: 4px;
+            flex: 1;
+            overflow-x: auto;
+        }
+
+        .record-tab {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            background-color: #fff;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            min-width: 80px;
+            justify-content: center;
+        }
+
+        .record-tab:hover {
+            background-color: #e9ecef;
+            border-color: #adb5bd;
+        }
+
+        .record-tab.active {
+            background-color: #0d6efd;
+            color: white;
+            border-color: #0d6efd;
+        }
+
+        .record-tab.editing {
+            background-color: #fff3cd;
+            border-color: #ffc107;
+        }
+
+        .record-tab-text {
+            flex: 1;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .record-tab-input {
+            border: none;
+            background: transparent;
+            text-align: center;
+            font-size: 14px;
+            font-weight: 500;
+            width: 100%;
+            outline: none;
+        }
+
+        .record-tab.active .record-tab-input {
+            color: white;
+        }
+
+        .record-tab.editing .record-tab-input {
+            color: #856404;
+        }
+
+        .record-tab-close {
+            margin-left: 8px;
+            padding: 2px 4px;
+            border: none;
+            background: transparent;
+            color: #6c757d;
+            cursor: pointer;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+
+        .record-tab-close:hover {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .record-tab.active .record-tab-close {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .record-tab.active .record-tab-close:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        #addRecordTabBtn {
+            flex-shrink: 0;
+        }
+
+        /* 表单动画容器 */
+        .record-form-container {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .record-form-content {
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        }
+
+        .record-form-content.slide-out-left {
+            transform: translateX(-100%);
+            opacity: 0;
+        }
+
+        .record-form-content.slide-in-right {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+
+        .record-form-content.slide-in-right.active {
+            transform: translateX(0);
+            opacity: 1;
+        }
+
     </style>
 </head>
 <body>
@@ -609,131 +737,146 @@
                 <div class="modal-body">
                     <form id="recordForm">
                         <input type="hidden" id="recordId">
+                        <input type="hidden" id="companyGroupId">
                         
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="companyName" class="form-label">公司名称 <span class="required">*</span></label>
-                                <input type="text" class="form-control" id="companyName" required>
+                        <!-- 公司名称 -->
+                        <div class="mb-3">
+                            <label for="companyName" class="form-label">公司名称 <span class="required">*</span></label>
+                            <input type="text" class="form-control" id="companyName" required>
+                        </div>
+                        
+                        <!-- 标签页区域 -->
+                        <div class="mb-3">
+                            <div class="record-tabs">
+                                <div class="record-tabs-container" id="recordTabsContainer">
+                                    <!-- 标签页将通过JavaScript动态生成 -->
+                                </div>
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="addRecordTabBtn" onclick="addRecordTab()">
+                                    <i class="bi bi-plus"></i>
+                                </button>
                             </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">投递岗位 <span class="required">*</span></label>
-                                <div id="positionContainer">
-                                    <div class="input-group mb-2">
-                                        <input type="text" class="form-control position-input" placeholder="请输入岗位名称" required>
-                                        <button class="btn btn-outline-success" type="button" onclick="addPosition()">
-                                            <i class="bi bi-plus"></i>
-                                        </button>
+                        </div>
+                        
+                        <!-- 表单内容区域（支持动画切换） -->
+                        <div class="record-form-container" id="recordFormContainer">
+                            <div class="record-form-content" id="recordFormContent">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="position" class="form-label">投递岗位 <span class="required">*</span></label>
+                                        <input type="text" class="form-control" id="position" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="baseLocation" class="form-label">Base地点</label>
+                                        <input type="text" class="form-control" id="baseLocation">
                                     </div>
                                 </div>
-                                <small class="text-muted">可以添加多个岗位，相同公司的岗位会自动合并显示</small>
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="baseLocation" class="form-label">Base地点</label>
-                                <input type="text" class="form-control" id="baseLocation">
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="companyUrl" class="form-label">公司招聘网站链接</label>
-                                <input type="url" class="form-control" id="companyUrl">
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label for="applyTime" class="form-label">投递时间 <span class="required">*</span></label>
-                                <input type="datetime-local" class="form-control" id="applyTime" required>
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label for="testTime" class="form-label">测评时间</label>
-                                <input type="datetime-local" class="form-control" id="testTime">
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label for="writtenExamTime" class="form-label">笔试时间</label>
-                                <input type="datetime-local" class="form-control" id="writtenExamTime">
-                            </div>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="currentStatus" class="form-label">当前状态</label>
-                                <select class="form-select" id="currentStatus" onchange="handleCurrentStatusChange()">
-                                    <option value="">请选择当前状态</option>
-                                    <option value="已投递">已投递</option>
-                                    <option value="已测评">已测评</option>
-                                    <option value="已笔试">已笔试</option>
-                                    <option value="已面试">已面试</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6 mb-3" id="currentStatusDateSection" style="display: none;">
-                                <label for="currentStatusDate" class="form-label">当前状态日期</label>
-                                <div class="input-group">
-                                    <input type="datetime-local" class="form-control" id="currentStatusDate">
-                                    <button class="btn btn-outline-danger" type="button" id="clearCurrentStatusBtn" onclick="clearCurrentStatus()" style="display: none;">
-                                        <i class="bi bi-x"></i>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <!-- 面试记录区域 -->
-                        <div class="mb-3">
-                            <label class="form-label">面试记录</label>
-                            <div id="interviewRecords">
-                                <!-- 面试记录将通过JavaScript动态添加 -->
-                            </div>
-                            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addInterviewRecord()">
-                                <i class="bi bi-plus"></i> 添加面试记录
-                            </button>
-                        </div>
-                        
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="finalResult" class="form-label">最终结果</label>
-                                <select class="form-select" id="finalResult" onchange="handleFinalResultChange()">
-                                    <option value="PENDING">待定</option>
-                                    <option value="简历挂">简历挂</option>
-                                    <option value="测评挂">测评挂</option>
-                                    <option value="笔试挂">笔试挂</option>
-                                    <option value="面试挂">面试挂</option>
-                                    <option value="OC">OC</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6 mb-3" id="salarySection" style="display: none;">
-                                <label class="form-label">预期薪资</label>
+                                
                                 <div class="row">
-                                    <div class="col-4">
-                                        <select class="form-select" id="expectedSalaryType" onchange="handleSalaryTypeChange()">
-                                            <option value="总包">总包</option>
-                                            <option value="月薪">月薪</option>
-                                            <option value="待商议">待商议</option>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="companyUrl" class="form-label">公司招聘网站链接</label>
+                                        <input type="url" class="form-control" id="companyUrl">
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="applyTime" class="form-label">投递时间 <span class="required">*</span></label>
+                                        <input type="datetime-local" class="form-control" id="applyTime" required>
+                                    </div>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-4 mb-3">
+                                        <label for="testTime" class="form-label">测评时间</label>
+                                        <input type="datetime-local" class="form-control" id="testTime">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="writtenExamTime" class="form-label">笔试时间</label>
+                                        <input type="datetime-local" class="form-control" id="writtenExamTime">
+                                    </div>
+                                    <div class="col-md-4 mb-3">
+                                        <label for="currentStatus" class="form-label">当前状态</label>
+                                        <select class="form-select" id="currentStatus" onchange="handleCurrentStatusChange()">
+                                            <option value="">请选择当前状态</option>
+                                            <option value="已投递">已投递</option>
+                                            <option value="已测评">已测评</option>
+                                            <option value="已笔试">已笔试</option>
+                                            <option value="已面试">已面试</option>
                                         </select>
                                     </div>
-                                    <div class="col-8" id="salaryValueContainer">
-                                        <input type="text" class="form-control" id="expectedSalaryValue" placeholder="请输入薪资">
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6 mb-3" id="currentStatusDateSection" style="display: none;">
+                                        <label for="currentStatusDate" class="form-label">当前状态日期</label>
+                                        <div class="input-group">
+                                            <input type="datetime-local" class="form-control" id="currentStatusDate">
+                                            <button class="btn btn-outline-danger" type="button" id="clearCurrentStatusBtn" onclick="clearCurrentStatus()" style="display: none;">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="finalResult" class="form-label">最终结果</label>
+                                        <select class="form-select" id="finalResult" onchange="handleFinalResultChange()">
+                                            <option value="PENDING">待定</option>
+                                            <option value="简历挂">简历挂</option>
+                                            <option value="测评挂">测评挂</option>
+                                            <option value="笔试挂">笔试挂</option>
+                                            <option value="面试挂">面试挂</option>
+                                            <option value="OC">OC</option>
+                                        </select>
                                     </div>
                                 </div>
-                                <div class="row mt-2" id="monthlySalaryContainer" style="display: none;">
-                                    <div class="col-6">
-                                        <input type="number" class="form-control" id="monthlySalary" placeholder="月薪" min="0" step="0.1">
+                                
+                                <!-- 面试记录区域 -->
+                                <div class="mb-3">
+                                    <label class="form-label">面试记录</label>
+                                    <div id="interviewRecords">
+                                        <!-- 面试记录将通过JavaScript动态添加 -->
                                     </div>
-                                    <div class="col-6">
-                                        <input type="number" class="form-control" id="monthlyCount" placeholder="月数" min="1" max="24" value="12">
+                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="addInterviewRecord()">
+                                        <i class="bi bi-plus"></i> 添加面试记录
+                                    </button>
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6 mb-3" id="salarySection" style="display: none;">
+                                        <label class="form-label">预期薪资</label>
+                                        <div class="row">
+                                            <div class="col-4">
+                                                <select class="form-select" id="expectedSalaryType" onchange="handleSalaryTypeChange()">
+                                                    <option value="总包">总包</option>
+                                                    <option value="月薪">月薪</option>
+                                                    <option value="待商议">待商议</option>
+                                                </select>
+                                            </div>
+                                            <div class="col-8" id="salaryValueContainer">
+                                                <input type="text" class="form-control" id="expectedSalaryValue" placeholder="请输入薪资">
+                                            </div>
+                                        </div>
+                                        <div class="row mt-2" id="monthlySalaryContainer" style="display: none;">
+                                            <div class="col-6">
+                                                <input type="number" class="form-control" id="monthlySalary" placeholder="月薪" min="0" step="0.1">
+                                            </div>
+                                            <div class="col-6">
+                                                <input type="number" class="form-control" id="monthlyCount" placeholder="月数" min="1" max="24" value="12">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="remarks" class="form-label">备注</label>
+                                        <textarea class="form-control" id="remarks" rows="3"></textarea>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label for="remarks" class="form-label">备注</label>
-                            <textarea class="form-control" id="remarks" rows="3"></textarea>
-                        </div>
                     </form>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-primary" onclick="saveRecord()">保存</button>
+                    <button type="button" class="btn btn-danger" id="deleteRecordBtn" onclick="deleteCurrentRecord()" style="display: none;">
+                        <i class="bi bi-trash"></i> 删除当前记录
+                    </button>
+                    <div class="ms-auto">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-primary" onclick="saveRecord()">保存</button>
+                    </div>
                 </div>
             </div>
         </div>

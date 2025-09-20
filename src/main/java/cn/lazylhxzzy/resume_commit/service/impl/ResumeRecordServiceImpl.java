@@ -42,28 +42,31 @@ public class ResumeRecordServiceImpl extends ServiceImpl<ResumeRecordMapper, Res
         
         List<ResumeRecord> records = resumeRecordMapper.selectList(queryWrapper);
         
-        // 按公司分组
-        Map<String, List<ResumeRecord>> groupedRecords = records.stream()
-                .collect(Collectors.groupingBy(record -> 
-                    record.getCompanyGroupId() != null ? record.getCompanyGroupId() : 
-                    generateGroupId(record.getUserId(), record.getCompanyName())
-                ));
-        
-        List<ResumeRecordDTO> groupedDtos = new ArrayList<>();
-        
-        for (Map.Entry<String, List<ResumeRecord>> entry : groupedRecords.entrySet()) {
-            List<ResumeRecord> companyRecords = entry.getValue();
-            
-            // 按更新时间排序，最新的作为主要岗位
-            companyRecords.sort((r1, r2) -> r2.getUpdatedAt().compareTo(r1.getUpdatedAt()));
-            
-            // 创建公司分组DTO
-            ResumeRecordDTO companyDto = createCompanyGroupDTO(companyRecords, userId);
-            groupedDtos.add(companyDto);
+        // 为每个record设置companyGroupId（如果没有的话）
+        for (ResumeRecord record : records) {
+            if (record.getCompanyGroupId() == null) {
+                record.setCompanyGroupId(generateGroupId(record.getUserId(), record.getCompanyName()));
+            }
         }
         
-        // 自定义排序
-        return sortRecords(groupedDtos);
+        // 按公司分组排序，然后按更新时间排序
+        records.sort((r1, r2) -> {
+            // 先按公司分组排序
+            int groupCompare = r1.getCompanyGroupId().compareTo(r2.getCompanyGroupId());
+            if (groupCompare != 0) return groupCompare;
+            
+            // 同公司内按最终结果排序（OC > PENDING > 其他）
+            int resultCompare = compareFinalResults(r1.getFinalResult(), r2.getFinalResult());
+            if (resultCompare != 0) return resultCompare;
+            
+            // 然后按更新时间排序
+            return r2.getUpdatedAt().compareTo(r1.getUpdatedAt());
+        });
+        
+        // 转换为DTO
+        return records.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
     }
     
     @Override
@@ -72,28 +75,31 @@ public class ResumeRecordServiceImpl extends ServiceImpl<ResumeRecordMapper, Res
         
         List<ResumeRecord> records = resumeRecordMapper.selectList(queryWrapper);
         
-        // 按公司分组
-        Map<String, List<ResumeRecord>> groupedRecords = records.stream()
-                .collect(Collectors.groupingBy(record -> 
-                    record.getCompanyGroupId() != null ? record.getCompanyGroupId() : 
-                    generateGroupId(record.getUserId(), record.getCompanyName())
-                ));
-        
-        List<ResumeRecordDTO> groupedDtos = new ArrayList<>();
-        
-        for (Map.Entry<String, List<ResumeRecord>> entry : groupedRecords.entrySet()) {
-            List<ResumeRecord> companyRecords = entry.getValue();
-            
-            // 按更新时间排序，最新的作为主要岗位
-            companyRecords.sort((r1, r2) -> r2.getUpdatedAt().compareTo(r1.getUpdatedAt()));
-            
-            // 创建公司分组DTO
-            ResumeRecordDTO companyDto = createCompanyGroupDTO(companyRecords, companyRecords.get(0).getUserId());
-            groupedDtos.add(companyDto);
+        // 为每个record设置companyGroupId（如果没有的话）
+        for (ResumeRecord record : records) {
+            if (record.getCompanyGroupId() == null) {
+                record.setCompanyGroupId(generateGroupId(record.getUserId(), record.getCompanyName()));
+            }
         }
         
-        // 自定义排序
-        return sortRecords(groupedDtos);
+        // 按公司分组排序，然后按更新时间排序
+        records.sort((r1, r2) -> {
+            // 先按公司分组排序
+            int groupCompare = r1.getCompanyGroupId().compareTo(r2.getCompanyGroupId());
+            if (groupCompare != 0) return groupCompare;
+            
+            // 同公司内按最终结果排序（OC > PENDING > 其他）
+            int resultCompare = compareFinalResults(r1.getFinalResult(), r2.getFinalResult());
+            if (resultCompare != 0) return resultCompare;
+            
+            // 然后按更新时间排序
+            return r2.getUpdatedAt().compareTo(r1.getUpdatedAt());
+        });
+        
+        // 转换为DTO
+        return records.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
     }
     
     @Override
@@ -134,11 +140,7 @@ public class ResumeRecordServiceImpl extends ServiceImpl<ResumeRecordMapper, Res
         record.setIsPrimary(false); // 新岗位不是主要岗位
         record.setCreatedAt(LocalDateTime.now());
         record.setUpdatedAt(LocalDateTime.now());
-        if(recordDTO.getCurrentStatus() != null)
-            if(recordDTO.getCurrentStatus().isEmpty() || recordDTO.getCurrentStatus().isBlank())
-                record.setCurrentStatus(null);
-            else record.setCurrentStatus(recordDTO.getCurrentStatus());
-        else record.setCurrentStatus(null);
+        record.setCurrentStatus(recordDTO.getCurrentStatus());
         resumeRecordMapper.insert(record);
         
         // 添加面试记录
@@ -474,28 +476,31 @@ public class ResumeRecordServiceImpl extends ServiceImpl<ResumeRecordMapper, Res
         
         List<ResumeRecord> records = resumeRecordMapper.selectList(queryWrapper);
         
-        // 按公司分组
-        Map<String, List<ResumeRecord>> groupedRecords = records.stream()
-                .collect(Collectors.groupingBy(record -> 
-                    record.getCompanyGroupId() != null ? record.getCompanyGroupId() : 
-                    generateGroupId(record.getUserId(), record.getCompanyName())
-                ));
-        
-        List<ResumeRecordDTO> groupedDtos = new ArrayList<>();
-        
-        for (Map.Entry<String, List<ResumeRecord>> entry : groupedRecords.entrySet()) {
-            List<ResumeRecord> companyRecords = entry.getValue();
-            
-            // 按更新时间排序，最新的作为主要岗位
-            companyRecords.sort((r1, r2) -> r2.getUpdatedAt().compareTo(r1.getUpdatedAt()));
-            
-            // 创建公司分组DTO
-            ResumeRecordDTO companyDto = createCompanyGroupDTO(companyRecords, userId);
-            groupedDtos.add(companyDto);
+        // 为每个record设置companyGroupId（如果没有的话）
+        for (ResumeRecord record : records) {
+            if (record.getCompanyGroupId() == null) {
+                record.setCompanyGroupId(generateGroupId(record.getUserId(), record.getCompanyName()));
+            }
         }
         
-        // 自定义排序
-        return sortRecords(groupedDtos);
+        // 按公司分组排序，然后按更新时间排序
+        records.sort((r1, r2) -> {
+            // 先按公司分组排序
+            int groupCompare = r1.getCompanyGroupId().compareTo(r2.getCompanyGroupId());
+            if (groupCompare != 0) return groupCompare;
+            
+            // 同公司内按最终结果排序（OC > PENDING > 其他）
+            int resultCompare = compareFinalResults(r1.getFinalResult(), r2.getFinalResult());
+            if (resultCompare != 0) return resultCompare;
+            
+            // 然后按更新时间排序
+            return r2.getUpdatedAt().compareTo(r1.getUpdatedAt());
+        });
+        
+        // 转换为DTO
+        return records.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
     }
     
     @Override
@@ -507,28 +512,31 @@ public class ResumeRecordServiceImpl extends ServiceImpl<ResumeRecordMapper, Res
         
         List<ResumeRecord> records = resumeRecordMapper.selectList(queryWrapper);
         
-        // 按公司分组
-        Map<String, List<ResumeRecord>> groupedRecords = records.stream()
-                .collect(Collectors.groupingBy(record -> 
-                    record.getCompanyGroupId() != null ? record.getCompanyGroupId() : 
-                    generateGroupId(record.getUserId(), record.getCompanyName())
-                ));
-        
-        List<ResumeRecordDTO> groupedDtos = new ArrayList<>();
-        
-        for (Map.Entry<String, List<ResumeRecord>> entry : groupedRecords.entrySet()) {
-            List<ResumeRecord> companyRecords = entry.getValue();
-            
-            // 按更新时间排序，最新的作为主要岗位
-            companyRecords.sort((r1, r2) -> r2.getUpdatedAt().compareTo(r1.getUpdatedAt()));
-            
-            // 创建公司分组DTO
-            ResumeRecordDTO companyDto = createCompanyGroupDTO(companyRecords, companyRecords.get(0).getUserId());
-            groupedDtos.add(companyDto);
+        // 为每个record设置companyGroupId（如果没有的话）
+        for (ResumeRecord record : records) {
+            if (record.getCompanyGroupId() == null) {
+                record.setCompanyGroupId(generateGroupId(record.getUserId(), record.getCompanyName()));
+            }
         }
         
-        // 自定义排序
-        return sortRecords(groupedDtos);
+        // 按公司分组排序，然后按更新时间排序
+        records.sort((r1, r2) -> {
+            // 先按公司分组排序
+            int groupCompare = r1.getCompanyGroupId().compareTo(r2.getCompanyGroupId());
+            if (groupCompare != 0) return groupCompare;
+            
+            // 同公司内按最终结果排序（OC > PENDING > 其他）
+            int resultCompare = compareFinalResults(r1.getFinalResult(), r2.getFinalResult());
+            if (resultCompare != 0) return resultCompare;
+            
+            // 然后按更新时间排序
+            return r2.getUpdatedAt().compareTo(r1.getUpdatedAt());
+        });
+        
+        // 转换为DTO
+        return records.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
     }
     
     /**
@@ -600,6 +608,74 @@ public class ResumeRecordServiceImpl extends ServiceImpl<ResumeRecordMapper, Res
      */
     private String generateGroupId(Long userId, String companyName) {
         return "group_" + userId + "_" + companyName + "_" + System.currentTimeMillis();
+    }
+    
+    /**
+     * 比较最终结果优先级
+     */
+    private int compareFinalResults(String result1, String result2) {
+        int priority1 = getResultPriority(result1);
+        int priority2 = getResultPriority(result2);
+        return Integer.compare(priority1, priority2);
+    }
+    
+    /**
+     * 获取结果优先级（数字越小优先级越高）
+     */
+    private int getResultPriority(String result) {
+        if (result == null) return 999;
+        switch (result) {
+            case "OC": return 1;
+            case "PENDING": return 2;
+            case "简历挂":
+            case "测评挂":
+            case "笔试挂":
+            case "面试挂": return 3;
+            default: return 4;
+        }
+    }
+    
+    /**
+     * 获取同一公司的其他岗位记录（用于编辑时的岗位选择）
+     */
+    public List<ResumeRecordDTO> getCompanyOtherRecords(Long currentRecordId, String companyName, Long userId) {
+        QueryWrapper<ResumeRecord> queryWrapper = new QueryWrapper<>();
+        queryWrapper.eq("user_id", userId)
+                   .eq("company_name", companyName)
+                   .ne("id", currentRecordId)
+                   .orderByDesc("updated_at");
+        
+        List<ResumeRecord> records = resumeRecordMapper.selectList(queryWrapper);
+        
+        // 转换为DTO
+        return records.stream()
+                .map(this::convertToDTO)
+                .collect(Collectors.toList());
+    }
+    
+    /**
+     * 将ResumeRecord转换为ResumeRecordDTO
+     */
+    private ResumeRecordDTO convertToDTO(ResumeRecord record) {
+        ResumeRecordDTO recordDTO = new ResumeRecordDTO();
+        BeanUtils.copyProperties(record, recordDTO);
+        
+        // 获取面试记录
+        QueryWrapper<InterviewRecord> interviewWrapper = new QueryWrapper<>();
+        interviewWrapper.eq("resume_record_id", record.getId())
+                       .orderByAsc("interview_time");
+        List<InterviewRecord> interviews = interviewRecordMapper.selectList(interviewWrapper);
+        List<InterviewRecordDTO> interviewDTOs = interviews.stream().map(interview -> {
+            InterviewRecordDTO interviewDTO = new InterviewRecordDTO();
+            BeanUtils.copyProperties(interview, interviewDTO);
+            return interviewDTO;
+        }).collect(Collectors.toList());
+        recordDTO.setInterviews(interviewDTOs);
+        
+        // 计算泡池时间
+        recordDTO.setPoolDays(calculatePoolDaysFromDTOs(record, interviewDTOs));
+        
+        return recordDTO;
     }
     
     /**
