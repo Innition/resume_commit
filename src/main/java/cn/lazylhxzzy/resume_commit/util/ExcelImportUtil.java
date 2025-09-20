@@ -93,7 +93,10 @@ public class ExcelImportUtil {
         }
         
         // 当前状态
-        record.setCurrentStatus(getCellValueAsString(row.getCell(4)));
+        String currentStatus = getCellValueAsString(row.getCell(4));
+        if (currentStatus != null && !currentStatus.trim().isEmpty()) {
+            record.setCurrentStatus(currentStatus.trim());
+        }
         
         // 当前状态日期
         String currentStatusDateStr = getCellValueAsString(row.getCell(5));

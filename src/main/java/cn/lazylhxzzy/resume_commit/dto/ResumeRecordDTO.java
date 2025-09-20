@@ -47,6 +47,10 @@ public class ResumeRecordDTO {
     
     private Boolean isPrimary;
     
+    private LocalDateTime createdAt;
+    
+    private LocalDateTime updatedAt;
+    
     // 面试记录列表
     private List<InterviewRecordDTO> interviews;
     

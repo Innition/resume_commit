@@ -54,26 +54,6 @@ public interface ResumeRecordService extends IService<ResumeRecord> {
     byte[] exportAllRecords();
     
     /**
-     * 导出搜索筛选结果为Excel（用户）
-     */
-    byte[] exportSearchUserRecords(Long userId, String keywords, String finalResult, String currentStatus, Double minSalary);
-    
-    /**
-     * 导出搜索筛选结果为Excel（ROOT用户）
-     */
-    byte[] exportSearchAllRecords(String keywords, String finalResult, String currentStatus, Double minSalary);
-    
-    /**
-     * 搜索和筛选用户的投递记录
-     */
-    List<ResumeRecordDTO> searchUserRecords(Long userId, String keywords, String finalResult, String currentStatus, Double minSalary);
-    
-    /**
-     * 搜索和筛选所有投递记录（ROOT用户）
-     */
-    List<ResumeRecordDTO> searchAllRecords(String keywords, String finalResult, String currentStatus, Double minSalary);
-    
-    /**
      * 导入Excel数据（预览模式）
      */
     List<ResumeRecordDTO> previewImportData(InputStream inputStream, String fileName);

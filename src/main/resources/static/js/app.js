@@ -1,6 +1,7 @@
 // 全局变量
 let currentUser = null;
 let currentRecords = [];
+let allRecords = []; // 保存所有原始记录
 let filteredRecords = [];
 let isFiltered = false;
 let currentCompanyGroupMap = new Map(); // 公司组映射：key=companyGroupId, value=record数组
@@ -10,6 +11,9 @@ let currentViewMode = 'card'; // 当前显示模式：'card' 或 'list'
 let modalRecords = []; // 模态框中当前编辑的所有record
 let currentModalRecordIndex = 0; // 当前选中的record索引
 let isModalEditMode = false; // 是否为编辑模式
+
+// 排序相关变量
+let currentSortType = 'poolDays'; // 当前排序类型，默认为泡池时间
 
 // 防抖函数
 function debounce(func, wait) {
@@ -214,6 +218,7 @@ function loadRecords() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
+                allRecords = data.data; // 保存所有原始记录
                 currentRecords = data.data;
                 buildCompanyGroupMap();
                 renderRecords();
@@ -241,13 +246,8 @@ function buildCompanyGroupMap() {
         currentCompanyGroupMap.get(companyGroupId).push(record);
     });
     
-    // 对每个公司组的record数组进行排序（流程更新的record放在最前方）
-    currentCompanyGroupMap.forEach((records, companyGroupId) => {
-        records.sort((a, b) => {
-            // 按updatedAt降序排序，最新的在前
-            return new Date(b.updatedAt) - new Date(a.updatedAt);
-        });
-    });
+        // 对公司组进行排序
+        sortRecords();
     
     console.log('构建公司组映射完成:', currentCompanyGroupMap);
 }
@@ -608,44 +608,92 @@ function applyFilters() {
         // 如果没有筛选条件，显示所有记录
         isFiltered = false;
         filteredRecords = [];
-        renderRecords();
+        // 重新加载原始数据
+        loadRecords();
         hideFilterResult();
         return;
     }
 
-    // 构建查询参数
-    const params = new URLSearchParams();
-    if (keywords) params.append('keywords', keywords);
-    if (finalResult) params.append('finalResult', finalResult);
-    if (currentStatus) params.append('currentStatus', currentStatus);
-    if (minSalary !== null && minSalary > 0) params.append('minSalary', minSalary);
-
-    // 发送搜索请求
-    fetch(`${API_BASE}/records/search?${params.toString()}`, {
-        method: 'GET',
-        headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`
+    // 在前端进行筛选
+    filteredRecords = allRecords.filter(record => {
+        // 关键词筛选
+        if (keywords) {
+            const keywordArray = keywords.split(/[,，]/).map(k => k.trim()).filter(k => k);
+            const keywordMatch = keywordArray.some(keyword => 
+                record.companyName.toLowerCase().includes(keyword.toLowerCase()) ||
+                record.position.toLowerCase().includes(keyword.toLowerCase()) ||
+                (record.baseLocation && record.baseLocation.toLowerCase().includes(keyword.toLowerCase()))
+            );
+            if (!keywordMatch) return false;
         }
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                filteredRecords = data.data;
+
+        // 最终结果筛选
+        if (finalResult) {
+            if (finalResult === '已挂') {
+                // 已挂：筛选所有包含"挂"的结果
+                if (!record.finalResult || !record.finalResult.includes('挂')) {
+                    return false;
+                }
+            } else if (finalResult === '待定') {
+                // 待定：筛选PENDING状态
+                if (record.finalResult !== 'PENDING') {
+                    return false;
+                }
+            } else {
+                // 其他状态：精确匹配
+                if (record.finalResult !== finalResult) {
+                    return false;
+                }
+            }
+        }
+
+        // 当前状态筛选
+        if (currentStatus && record.currentStatus !== currentStatus) {
+            return false;
+        }
+
+        // 最低薪资筛选
+        if (minSalary !== null && minSalary > 0) {
+            if (record.finalResult !== 'OC' || !record.expectedSalaryType || !record.expectedSalaryValue) {
+                return false;
+            }
+            
+            let salaryValue = 0;
+            if (record.expectedSalaryType === '总包') {
+                // 总包：提取数字部分
+                const match = record.expectedSalaryValue.match(/(\d+(?:\.\d+)?)/);
+                if (match) {
+                    salaryValue = parseFloat(match[1]);
+                }
+            } else if (record.expectedSalaryType === '月薪') {
+                // 月薪：解析 "15k×12" 格式
+                const match = record.expectedSalaryValue.match(/(\d+(?:\.\d+)?)k×(\d+)/);
+                if (match) {
+                    const monthlySalary = parseFloat(match[1]);
+                    const months = parseInt(match[2]);
+                    salaryValue = monthlySalary * months / 12; // 转换为年总包
+                }
+            }
+            
+            if (salaryValue < minSalary) {
+                return false;
+            }
+        }
+
+        return true;
+    });
+
                 isFiltered = true;
+    
+    // 使用筛选后的数据重新构建公司组映射
+    currentRecords = filteredRecords;
+    buildCompanyGroupMap();
                 renderRecords();
 
                 // 显示筛选结果数量
                 const resultCount = filteredRecords.length;
-                const totalCount = currentRecords.length;
+    const totalCount = allRecords.length;
                 showFilterResult(resultCount, totalCount);
-            } else {
-                alert('搜索失败: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('搜索错误:', error);
-            alert('搜索失败: ' + error.message);
-        });
 }
 
 // 清空筛选条件
@@ -657,6 +705,10 @@ function clearFilters() {
 
     isFiltered = false;
     filteredRecords = [];
+    
+    // 恢复原始数据
+    currentRecords = [...allRecords];
+    buildCompanyGroupMap();
     renderRecords();
 
     // 隐藏筛选结果提示
@@ -1672,13 +1724,13 @@ function saveCompanyGroup(companyGroupId) {
 
     // 准备批量保存的数据
     const updatePromises = records.map(record => {
-        const recordData = {
+    const recordData = {
             id: record.id,
-            companyName: companyName,
+        companyName: companyName,
             position: record.id == currentRecordId ? position : record.position, // 只有当前编辑的record更新岗位名称
             baseLocation: record.id == currentRecordId ? baseLocation : (record.baseLocation || null),
             companyUrl: record.id == currentRecordId ? companyUrl : (record.companyUrl || null),
-            applyTime: applyTime,
+        applyTime: applyTime,
             testTime: record.id == currentRecordId ? testTime : (record.testTime || null),
             writtenExamTime: record.id == currentRecordId ? writtenExamTime : (record.writtenExamTime || null),
             currentStatus: record.id == currentRecordId ? currentStatus : (record.currentStatus || null), // 只有当前编辑的record更新状态
@@ -1967,23 +2019,12 @@ function exportData() {
     // 根据当前筛选状态决定导出内容
     let exportUrl = `${API_BASE}/records/export`;
     let filename = '投递记录.xlsx';
+    let recordCount = currentRecords.length;
 
-    // 如果有筛选条件，使用搜索接口导出
+    // 如果有筛选条件，导出筛选结果
     if (isFiltered && filteredRecords.length > 0) {
-        const keywords = document.getElementById('searchInput').value.trim();
-        const finalResult = document.getElementById('finalResultFilter').value;
-        const currentStatus = document.getElementById('currentStatusFilter').value;
-        const minSalary = document.getElementById('minSalaryFilter').value ? parseFloat(document.getElementById('minSalaryFilter').value) : null;
-
-        // 构建查询参数
-        const params = new URLSearchParams();
-        if (keywords) params.append('keywords', keywords);
-        if (finalResult) params.append('finalResult', finalResult);
-        if (currentStatus) params.append('currentStatus', currentStatus);
-        if (minSalary !== null && minSalary > 0) params.append('minSalary', minSalary);
-
-        exportUrl = `${API_BASE}/records/export/search?${params.toString()}`;
         filename = `投递记录_筛选结果_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        recordCount = filteredRecords.length;
     }
 
     fetch(exportUrl, {
@@ -2010,9 +2051,9 @@ function exportData() {
 
             // 显示导出成功提示
             if (isFiltered) {
-                alert(`已导出筛选结果，共 ${filteredRecords.length} 条记录`);
+                alert(`已导出筛选结果，共 ${recordCount} 条记录`);
             } else {
-                alert(`已导出所有记录，共 ${currentRecords.length} 条记录`);
+                alert(`已导出所有记录，共 ${recordCount} 条记录`);
             }
         })
         .catch(error => {
@@ -2384,4 +2425,89 @@ function switchToOtherPosition(recordId) {
 }
 
 // 旧的多岗位管理函数已移除，现在使用公司组映射管理
+
+// 排序相关函数
+function applySorting() {
+    const sortSelect = document.getElementById('sortSelect');
+    currentSortType = sortSelect.value;
+    
+    // 重新构建公司组映射并排序
+    buildCompanyGroupMap();
+    renderRecords();
+}
+
+// 获取结果优先级（数字越小优先级越高）
+function getResultPriority(result) {
+    if (!result) return 999;
+    switch (result) {
+        case 'OC': return 1;
+        case 'PENDING': return 2;
+        case '简历挂':
+        case '测评挂':
+        case '笔试挂':
+        case '面试挂': return 3;
+        default: return 4;
+    }
+}
+
+// 排序records数组
+function sortRecords() {
+    // 对 currentCompanyGroupMap 排序（原地更新，不返回）
+    currentCompanyGroupMap = new Map(
+        [...currentCompanyGroupMap.entries()].sort((a, b) => {
+            const recordA = a[1][0];
+            const recordB = b[1][0];
+
+            // 所有排序方式都先按 OC、PENDING、其他排序
+            const priorityA = getResultPriority(recordA.finalResult);
+            const priorityB = getResultPriority(recordB.finalResult);
+
+            if (priorityA !== priorityB) {
+                return priorityA - priorityB;
+            }
+
+            // 相同优先级时按具体排序类型排序
+            switch (currentSortType) {
+                case 'poolDays':
+                    return sortByPoolDays(recordA, recordB);
+                case 'updateTime':
+                    return sortByUpdateTime(recordA, recordB);
+                case 'applyTime':
+                    return sortByApplyTime(recordA, recordB);
+                case 'createdTime':
+                    return sortByCreatedTime(recordA, recordB);
+                default:
+                    return 0; // 默认不额外排序
+            }
+        })
+    );
+
+}
+
+// 按泡池时间排序（升序）
+function sortByPoolDays(a, b) {
+    const poolDaysA = a.poolDays || 0;
+    const poolDaysB = b.poolDays || 0;
+    return poolDaysA - poolDaysB;
+}
+
+// 按更新时间排序（降序，最新的在前）
+function sortByUpdateTime(a, b) {
+    const timeA = new Date(a.updatedAt || 0);
+    const timeB = new Date(b.updatedAt || 0);
+    return timeB - timeA;
+}
+
+// 按投递时间排序（降序，最新的在前）
+function sortByApplyTime(a, b) {
+    const timeA = new Date(a.applyTime || 0);
+    const timeB = new Date(b.applyTime || 0);
+    return timeB - timeA;
+}
+
+function sortByCreatedTime(a, b) {
+    const timeA = new Date(a.createdAt || 0);
+    const timeB = new Date(b.createdAt || 0);
+    return timeB - timeA;
+}
 

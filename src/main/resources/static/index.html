@@ -643,6 +643,17 @@
                         <!-- 搜索和筛选区域 -->
                         <div class="search-filter-section mb-4">
                             <div class="row g-3">
+                                <!-- 排序选择 -->
+                                <div class="col-md-1">
+                                    <label for="sortSelect" class="form-label">排序</label>
+                                    <select class="form-select" id="sortSelect" onchange="applySorting()">
+                                        <option value="poolDays" selected>泡池时间</option>
+                                        <option value="updateTime">更新时间</option>
+                                        <option value="applyTime">投递时间</option>
+                                        <option value="createdTime">创建时间</option>
+                                    </select>
+                                </div>
+                                
                                 <!-- 搜索区域 -->
                                 <div class="col-md-4">
                                     <label for="searchInput" class="form-label">搜索</label>
@@ -650,7 +661,7 @@
                                 </div>
                                 
                                 <!-- 最终结果筛选 -->
-                                <div class="col-md-2">
+                                <div class="col-md-1">
                                     <label for="finalResultFilter" class="form-label">最终结果</label>
                                     <select class="form-select" id="finalResultFilter">
                                         <option value="">全部</option>
@@ -661,7 +672,7 @@
                                 </div>
                                 
                                 <!-- 当前状态筛选 -->
-                                <div class="col-md-2">
+                                <div class="col-md-1">
                                     <label for="currentStatusFilter" class="form-label">当前状态</label>
                                     <select class="form-select" id="currentStatusFilter">
                                         <option value="">全部</option>
@@ -673,7 +684,7 @@
                                 </div>
                                 
                                 <!-- 薪资筛选 -->
-                                <div class="col-md-2">
+                                <div class="col-md-1">
                                     <label for="minSalaryFilter" class="form-label">最低薪资(w)</label>
                                     <input type="number" class="form-control" id="minSalaryFilter" placeholder="0" min="0" step="0.1">
                                 </div>
@@ -867,6 +878,7 @@
                                     </div>
                                 </div>
                             </div>
+                        </div>
                     </form>
                 </div>
                 <div class="modal-footer">

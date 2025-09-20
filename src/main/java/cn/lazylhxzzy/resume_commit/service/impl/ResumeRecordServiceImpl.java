@@ -49,19 +49,6 @@ public class ResumeRecordServiceImpl extends ServiceImpl<ResumeRecordMapper, Res
             }
         }
         
-        // 按公司分组排序，然后按更新时间排序
-        records.sort((r1, r2) -> {
-            // 先按公司分组排序
-            int groupCompare = r1.getCompanyGroupId().compareTo(r2.getCompanyGroupId());
-            if (groupCompare != 0) return groupCompare;
-            
-            // 同公司内按最终结果排序（OC > PENDING > 其他）
-            int resultCompare = compareFinalResults(r1.getFinalResult(), r2.getFinalResult());
-            if (resultCompare != 0) return resultCompare;
-            
-            // 然后按更新时间排序
-            return r2.getUpdatedAt().compareTo(r1.getUpdatedAt());
-        });
         
         // 转换为DTO
         return records.stream()
@@ -82,19 +69,6 @@ public class ResumeRecordServiceImpl extends ServiceImpl<ResumeRecordMapper, Res
             }
         }
         
-        // 按公司分组排序，然后按更新时间排序
-        records.sort((r1, r2) -> {
-            // 先按公司分组排序
-            int groupCompare = r1.getCompanyGroupId().compareTo(r2.getCompanyGroupId());
-            if (groupCompare != 0) return groupCompare;
-            
-            // 同公司内按最终结果排序（OC > PENDING > 其他）
-            int resultCompare = compareFinalResults(r1.getFinalResult(), r2.getFinalResult());
-            if (resultCompare != 0) return resultCompare;
-            
-            // 然后按更新时间排序
-            return r2.getUpdatedAt().compareTo(r1.getUpdatedAt());
-        });
         
         // 转换为DTO
         return records.stream()
@@ -340,25 +314,6 @@ public class ResumeRecordServiceImpl extends ServiceImpl<ResumeRecordMapper, Res
         }
     }
     
-    @Override
-    public byte[] exportSearchUserRecords(Long userId, String keywords, String finalResult, String currentStatus, Double minSalary) {
-        try {
-            List<ResumeRecordDTO> records = searchUserRecords(userId, keywords, finalResult, currentStatus, minSalary);
-            return ExcelUtil.exportResumeRecords(records);
-        } catch (Exception e) {
-            throw new RuntimeException("导出用户筛选数据失败", e);
-        }
-    }
-    
-    @Override
-    public byte[] exportSearchAllRecords(String keywords, String finalResult, String currentStatus, Double minSalary) {
-        try {
-            List<ResumeRecordDTO> records = searchAllRecords(keywords, finalResult, currentStatus, minSalary);
-            return ExcelUtil.exportResumeRecords(records);
-        } catch (Exception e) {
-            throw new RuntimeException("导出筛选数据失败", e);
-        }
-    }
     
     
     /**
@@ -417,191 +372,8 @@ public class ResumeRecordServiceImpl extends ServiceImpl<ResumeRecordMapper, Res
         return (int) java.time.Duration.between(latestTime, LocalDateTime.now()).toDays();
     }
     
-    /**
-     * 自定义排序方法
-     * 1. OC放在最上面
-     * 2. PENDING按泡池时间升序排列
-     * 3. 其他结果（简历挂、测评挂、笔试挂、面试挂）放在最下面
-     */
-    private List<ResumeRecordDTO> sortRecords(List<ResumeRecordDTO> records) {
-        return records.stream()
-                .sorted((r1, r2) -> {
-                    String result1 = r1.getFinalResult();
-                    String result2 = r2.getFinalResult();
-                    
-                    // 1. OC优先级最高
-                    if ("OC".equals(result1) && !"OC".equals(result2)) {
-                        return -1;
-                    }
-                    if (!"OC".equals(result1) && "OC".equals(result2)) {
-                        return 1;
-                    }
-                    
-                    // 2. PENDING按泡池时间升序排列
-                    if ("PENDING".equals(result1) && "PENDING".equals(result2)) {
-                        Integer poolDays1 = r1.getPoolDays() != null ? r1.getPoolDays() : 0;
-                        Integer poolDays2 = r2.getPoolDays() != null ? r2.getPoolDays() : 0;
-                        return poolDays1.compareTo(poolDays2);
-                    }
-                    
-                    // 3. PENDING优先级高于其他结果
-                    if ("PENDING".equals(result1) && !"PENDING".equals(result2) && !"OC".equals(result2)) {
-                        return -1;
-                    }
-                    if (!"PENDING".equals(result1) && !"OC".equals(result1) && "PENDING".equals(result2)) {
-                        return 1;
-                    }
-                    
-                    // 4. 其他结果（简历挂、测评挂、笔试挂、面试挂）按泡池时间升序排列
-                    if (!"OC".equals(result1) && !"PENDING".equals(result1) && 
-                        !"OC".equals(result2) && !"PENDING".equals(result2)) {
-                        Integer poolDays1 = r1.getPoolDays() != null ? r1.getPoolDays() : 0;
-                        Integer poolDays2 = r2.getPoolDays() != null ? r2.getPoolDays() : 0;
-                        return poolDays1.compareTo(poolDays2);
-                    }
-                    
-                    // 5. 默认按创建时间降序
-                    return 0;
-                })
-                .collect(Collectors.toList());
-    }
     
-    @Override
-    public List<ResumeRecordDTO> searchUserRecords(Long userId, String keywords, String finalResult, String currentStatus, Double minSalary) {
-        QueryWrapper<ResumeRecord> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("user_id", userId);
-        
-        // 应用筛选条件
-        applySearchFilters(queryWrapper, keywords, finalResult, currentStatus, minSalary);
-        
-        List<ResumeRecord> records = resumeRecordMapper.selectList(queryWrapper);
-        
-        // 为每个record设置companyGroupId（如果没有的话）
-        for (ResumeRecord record : records) {
-            if (record.getCompanyGroupId() == null) {
-                record.setCompanyGroupId(generateGroupId(record.getUserId(), record.getCompanyName()));
-            }
-        }
-        
-        // 按公司分组排序，然后按更新时间排序
-        records.sort((r1, r2) -> {
-            // 先按公司分组排序
-            int groupCompare = r1.getCompanyGroupId().compareTo(r2.getCompanyGroupId());
-            if (groupCompare != 0) return groupCompare;
-            
-            // 同公司内按最终结果排序（OC > PENDING > 其他）
-            int resultCompare = compareFinalResults(r1.getFinalResult(), r2.getFinalResult());
-            if (resultCompare != 0) return resultCompare;
-            
-            // 然后按更新时间排序
-            return r2.getUpdatedAt().compareTo(r1.getUpdatedAt());
-        });
-        
-        // 转换为DTO
-        return records.stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-    }
     
-    @Override
-    public List<ResumeRecordDTO> searchAllRecords(String keywords, String finalResult, String currentStatus, Double minSalary) {
-        QueryWrapper<ResumeRecord> queryWrapper = new QueryWrapper<>();
-        
-        // 应用筛选条件
-        applySearchFilters(queryWrapper, keywords, finalResult, currentStatus, minSalary);
-        
-        List<ResumeRecord> records = resumeRecordMapper.selectList(queryWrapper);
-        
-        // 为每个record设置companyGroupId（如果没有的话）
-        for (ResumeRecord record : records) {
-            if (record.getCompanyGroupId() == null) {
-                record.setCompanyGroupId(generateGroupId(record.getUserId(), record.getCompanyName()));
-            }
-        }
-        
-        // 按公司分组排序，然后按更新时间排序
-        records.sort((r1, r2) -> {
-            // 先按公司分组排序
-            int groupCompare = r1.getCompanyGroupId().compareTo(r2.getCompanyGroupId());
-            if (groupCompare != 0) return groupCompare;
-            
-            // 同公司内按最终结果排序（OC > PENDING > 其他）
-            int resultCompare = compareFinalResults(r1.getFinalResult(), r2.getFinalResult());
-            if (resultCompare != 0) return resultCompare;
-            
-            // 然后按更新时间排序
-            return r2.getUpdatedAt().compareTo(r1.getUpdatedAt());
-        });
-        
-        // 转换为DTO
-        return records.stream()
-                .map(this::convertToDTO)
-                .collect(Collectors.toList());
-    }
-    
-    /**
-     * 应用搜索和筛选条件
-     */
-    private void applySearchFilters(QueryWrapper<ResumeRecord> queryWrapper, String keywords, String finalResult, String currentStatus, Double minSalary) {
-        // 关键词搜索
-        if (keywords != null && !keywords.trim().isEmpty()) {
-            String[] keywordArray = keywords.split("[,，]"); // 支持半角和全角逗号
-            queryWrapper.and(wrapper -> {
-                for (int i = 0; i < keywordArray.length; i++) {
-                    String keyword = keywordArray[i].trim();
-                    if (!keyword.isEmpty()) {
-                        if (i == 0) {
-                            wrapper.and(subWrapper -> subWrapper
-                                .like("company_name", keyword) // 精确匹配公司名称
-                                .or()
-                                .like("position", keyword) // 模糊匹配岗位
-                                .or()
-                                .like("base_location", keyword) // 模糊匹配地点
-                            );
-                        } else {
-                            wrapper.or(subWrapper -> subWrapper
-                                .eq("company_name", keyword)
-                                .or()
-                                .like("position", keyword)
-                                .or()
-                                .like("base_location", keyword)
-                            );
-                        }
-                    }
-                }
-            });
-        }
-        
-        // 最终结果筛选
-        if (finalResult != null && !finalResult.trim().isEmpty()) {
-            if ("已挂".equals(finalResult)) {
-                queryWrapper.in("final_result", "简历挂", "测评挂", "笔试挂", "面试挂");
-            } else if ("待定".equals(finalResult)) {
-                queryWrapper.eq("final_result", "PENDING");
-            } else {
-                queryWrapper.eq("final_result", finalResult);
-            }
-        }
-        
-        // 当前状态筛选
-        if (currentStatus != null && !currentStatus.trim().isEmpty()) {
-            queryWrapper.eq("current_status", currentStatus);
-        }
-        
-        // 薪资筛选
-        if (minSalary != null && minSalary > 0) {
-            // 这里需要特殊处理，因为薪资存储格式不同
-            // 总包：直接比较数值
-            // 月薪：需要计算年包 = 月薪 * 月数
-            queryWrapper.and(wrapper -> wrapper
-                .apply("(expected_salary_type = '总包' AND CAST(REPLACE(expected_salary_value, 'w', '') AS DECIMAL) >= {0})", minSalary)
-                .or()
-                .apply("expected_salary_type = '月薪' AND expected_salary_value REGEXP '^[0-9]+(\\.[0-9]+)?k×[0-9]+$' AND " +
-                       "CAST(SUBSTRING_INDEX(SUBSTRING_INDEX(expected_salary_value, 'k×', 1), 'k', -1) AS DECIMAL) * " +
-                       "CAST(SUBSTRING_INDEX(expected_salary_value, 'k×', -1) AS DECIMAL) >= {0}", minSalary)
-            );
-        }
-    }
     
     /**
      * 生成公司分组ID
@@ -613,27 +385,6 @@ public class ResumeRecordServiceImpl extends ServiceImpl<ResumeRecordMapper, Res
     /**
      * 比较最终结果优先级
      */
-    private int compareFinalResults(String result1, String result2) {
-        int priority1 = getResultPriority(result1);
-        int priority2 = getResultPriority(result2);
-        return Integer.compare(priority1, priority2);
-    }
-    
-    /**
-     * 获取结果优先级（数字越小优先级越高）
-     */
-    private int getResultPriority(String result) {
-        if (result == null) return 999;
-        switch (result) {
-            case "OC": return 1;
-            case "PENDING": return 2;
-            case "简历挂":
-            case "测评挂":
-            case "笔试挂":
-            case "面试挂": return 3;
-            default: return 4;
-        }
-    }
     
     /**
      * 获取同一公司的其他岗位记录（用于编辑时的岗位选择）
