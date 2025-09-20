@@ -50,6 +50,7 @@ document.addEventListener('DOMContentLoaded', function() {
     // 用户岗位偏好已移除，现在使用公司组映射管理
 });
 
+
 // 检查用户认证状态
 function checkAuth() {
     const token = localStorage.getItem('token');
@@ -2501,77 +2502,3 @@ function sortByCreatedTime(a, b) {
     return timeB - timeA;
 }
 
-function animateReorder(container, {
-    keyOf,           // (el) => string  从子节点取 key（这里用 data-key）
-    build,           // () => void      把“期望最终状态”的 DOM 放进 container（尽量复用旧节点）
-    onEnter,         // (el) => void    新增节点入场初始化（可选）
-    onLeave          // (el) => Promise 可返回一个 Promise 完成后再移除（可选）
-}) {
-    const oldChildren = Array.from(container.children);
-    const oldRects = new Map();
-    const oldMap = new Map();
-
-    oldChildren.forEach(el => {
-        const key = keyOf(el);
-        if (!key) return;
-        oldMap.set(key, el);
-        oldRects.set(key, el.getBoundingClientRect());
-    });
-
-    // 标记老孩子都“未使用”
-    const usedOld = new Set();
-
-    // === 构建新状态（尽量复用旧节点） ===
-    const frag = document.createDocumentFragment();
-    build({ reuse: (key, createEl) => {
-            let el = oldMap.get(key);
-            if (el) { usedOld.add(key); }
-            else { el = createEl(); if (onEnter) onEnter(el); }
-            el.dataset.key = key;
-            frag.appendChild(el);
-            return el;
-        }});
-
-    // 找出要删除的旧节点
-    const toRemove = oldChildren.filter(el => !usedOld.has(keyOf(el)));
-
-    // 先把新 DOM 塞回容器（进入“Last”阶段）
-    container.innerHTML = '';
-    container.appendChild(frag);
-
-    // 计算位移
-    const newChildren = Array.from(container.children);
-    const invertOps = [];
-    newChildren.forEach(el => {
-        const key = keyOf(el);
-        const last = el.getBoundingClientRect();
-        const first = oldRects.get(key);
-        if (first) {
-            const dx = first.left - last.left;
-            const dy = first.top - last.top;
-            if (dx || dy) {
-                el.style.transform = `translate(${dx}px, ${dy}px)`;
-            }
-        }
-    });
-
-    // 强制一次 reflow
-    container.offsetWidth; // eslint-disable-line no-unused-expressions
-
-    // 播放
-    newChildren.forEach(el => {
-        el.style.transform = '';
-        el.style.opacity = '';
-    });
-
-    // 删除的做淡出后移除
-    toRemove.forEach(el => {
-        el.classList.add('anim-leave');
-        const removeNow = () => el.remove();
-        if (onLeave) {
-            onLeave(el)?.finally(removeNow);
-        } else {
-            setTimeout(removeNow, 220);
-        }
-    });
-}
