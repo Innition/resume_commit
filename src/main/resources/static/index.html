@@ -578,6 +578,91 @@
             opacity: 1;
         }
 
+        /* 卡片飞行动画系统 */
+        .process-item {
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            transform-origin: center;
+        }
+
+        /* 新增动画 */
+        .process-item.card-fly-in {
+            animation: cardFlyIn 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+        }
+
+        @keyframes cardFlyIn {
+            0% {
+                transform: translate(300px, 200px) rotate(15deg) scale(0.3);
+                opacity: 0;
+            }
+            60% {
+                transform: translate(0, 0) rotate(0deg) scale(1.05);
+                opacity: 1;
+            }
+            80% {
+                transform: translate(0, 0) rotate(0deg) scale(0.98);
+            }
+            100% {
+                transform: translate(0, 0) rotate(0deg) scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* 移动动画 */
+        .process-item.card-move {
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 10;
+        }
+
+        /* 删除动画 */
+        .process-item.card-fly-out {
+            animation: cardFlyOut 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+            z-index: 5;
+        }
+
+        @keyframes cardFlyOut {
+            0% {
+                transform: scale(1) rotate(0deg);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(0.8) rotate(-5deg);
+                opacity: 0.7;
+            }
+            100% {
+                transform: translate(200px, -100px) scale(0.3) rotate(-15deg);
+                opacity: 0;
+            }
+        }
+
+        /* 重新排列动画 */
+        .process-item.card-rearrange {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 高亮效果 */
+        .process-item.card-highlight {
+            animation: cardHighlight 0.6s ease-in-out;
+        }
+
+        @keyframes cardHighlight {
+            0%, 100% {
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            50% {
+                box-shadow: 0 8px 25px rgba(13, 110, 253, 0.3);
+                transform: translateY(-4px);
+            }
+        }
+
+        /* 容器动画 */
+        .process-grid.animating {
+            overflow: visible;
+        }
+
+        .process-grid.animating .process-item {
+            position: relative;
+        }
+
     </style>
 </head>
 <body>

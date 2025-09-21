@@ -15,6 +15,11 @@ let isModalEditMode = false; // 是否为编辑模式
 // 排序相关变量
 let currentSortType = 'poolDays'; // 当前排序类型，默认为泡池时间
 
+// 动画相关变量
+let isAnimating = false; // 是否正在执行动画
+let animationQueue = []; // 动画队列
+let cardElements = new Map(); // 存储卡片DOM元素引用：key=companyGroupId, value=DOM元素
+
 // 防抖函数
 function debounce(func, wait) {
     let timeout;
@@ -26,6 +31,221 @@ function debounce(func, wait) {
         clearTimeout(timeout);
         timeout = setTimeout(later, wait);
     };
+}
+
+// ==================== 动画系统核心函数 ====================
+
+// 添加动画到队列
+function addAnimation(animation) {
+    animationQueue.push(animation);
+    if (!isAnimating) {
+        processAnimationQueue();
+    }
+}
+
+// 处理动画队列
+async function processAnimationQueue() {
+    if (animationQueue.length === 0) {
+        isAnimating = false;
+        return;
+    }
+    
+    isAnimating = true;
+    const animation = animationQueue.shift();
+    
+    try {
+        await executeAnimation(animation);
+    } catch (error) {
+        console.error('动画执行失败:', error);
+    }
+    
+    // 继续处理下一个动画
+    setTimeout(() => {
+        processAnimationQueue();
+    }, 100);
+}
+
+// 执行具体动画
+async function executeAnimation(animation) {
+    const { type, companyGroupId, data } = animation;
+    
+    console.log('执行动画:', type, companyGroupId, data);
+    
+    switch (type) {
+        case 'add':
+            await animateCardAdd(companyGroupId, data);
+            break;
+        case 'move':
+            await animateCardMove(companyGroupId, data);
+            break;
+        case 'delete':
+            await animateCardDelete(companyGroupId);
+            break;
+        case 'rearrange':
+            await animateCardRearrange(data);
+            break;
+        case 'highlight':
+            await animateCardHighlight(companyGroupId);
+            break;
+    }
+}
+
+// 新增卡片动画
+async function animateCardAdd(companyGroupId, record) {
+    const cardElement = cardElements.get(companyGroupId);
+    if (!cardElement) {
+        console.log('未找到卡片元素:', companyGroupId);
+        return;
+    }
+    
+    console.log('开始新增动画:', companyGroupId);
+    
+    // 直接添加飞入动画类
+    cardElement.classList.add('card-fly-in');
+    
+    // 等待动画完成
+    await new Promise(resolve => {
+        setTimeout(() => {
+            cardElement.classList.remove('card-fly-in');
+            console.log('新增动画完成:', companyGroupId);
+            resolve();
+        }, 800);
+    });
+}
+
+// 移动卡片动画
+async function animateCardMove(companyGroupId, newIndex) {
+    const cardElement = cardElements.get(companyGroupId);
+    if (!cardElement) return;
+    
+    cardElement.classList.add('card-move');
+    
+    // 计算新位置
+    const targetRect = calculateCardPosition(companyGroupId, newIndex);
+    
+    // 设置新位置
+    cardElement.style.transform = `translate(${targetRect.left}px, ${targetRect.top}px)`;
+    
+    await new Promise(resolve => {
+        setTimeout(() => {
+            cardElement.style.transform = '';
+            cardElement.classList.remove('card-move');
+            resolve();
+        }, 500);
+    });
+}
+
+// 删除卡片动画
+async function animateCardDelete(companyGroupId) {
+    const cardElement = cardElements.get(companyGroupId);
+    if (!cardElement) {
+        console.log('未找到要删除的卡片元素:', companyGroupId);
+        return;
+    }
+    
+    console.log('开始删除动画:', companyGroupId);
+    
+    cardElement.classList.add('card-fly-out');
+    
+    await new Promise(resolve => {
+        setTimeout(() => {
+            cardElement.remove();
+            cardElements.delete(companyGroupId);
+            console.log('删除动画完成，已移除卡片:', companyGroupId);
+            resolve();
+        }, 500);
+    });
+}
+
+// 重新排列卡片动画
+async function animateCardRearrange(rearrangeData) {
+    console.log('开始重新排列动画:', rearrangeData);
+    
+    const container = document.getElementById('processGrid');
+    container.classList.add('animating');
+    
+    // 为所有卡片添加重新排列动画类
+    cardElements.forEach(card => {
+        card.classList.add('card-rearrange');
+    });
+    
+    // 等待一小段时间让动画类生效
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    // 重新排列DOM元素
+    const sortedEntries = [...currentCompanyGroupMap.entries()];
+    sortedEntries.forEach(([companyGroupId, records]) => {
+        const cardElement = cardElements.get(companyGroupId);
+        if (cardElement) {
+            container.appendChild(cardElement);
+        }
+    });
+    
+    await new Promise(resolve => {
+        setTimeout(() => {
+            cardElements.forEach(card => {
+                card.classList.remove('card-rearrange');
+            });
+            container.classList.remove('animating');
+            console.log('重新排列动画完成');
+            resolve();
+        }, 400);
+    });
+}
+
+// 高亮卡片动画
+async function animateCardHighlight(companyGroupId) {
+    const cardElement = cardElements.get(companyGroupId);
+    if (!cardElement) return;
+    
+    cardElement.classList.add('card-highlight');
+    
+    await new Promise(resolve => {
+        setTimeout(() => {
+            cardElement.classList.remove('card-highlight');
+            resolve();
+        }, 600);
+    });
+}
+
+// 计算卡片位置
+function calculateCardPosition(companyGroupId, targetIndex = null) {
+    const container = document.getElementById('processGrid');
+    const containerRect = container.getBoundingClientRect();
+    
+    // 获取当前排序后的公司组数组
+    const sortedEntries = [...currentCompanyGroupMap.entries()];
+    const currentIndex = targetIndex !== null ? targetIndex : 
+        sortedEntries.findIndex(([id]) => id === companyGroupId);
+    
+    if (currentIndex === -1) {
+        return { top: 0, left: 0 };
+    }
+    
+    // 计算网格位置
+    const cardWidth = 300; // 卡片宽度
+    const cardHeight = 400; // 估算卡片高度
+    const gap = 20; // 卡片间距
+    const cardsPerRow = Math.floor((containerRect.width - gap) / (cardWidth + gap));
+    
+    const row = Math.floor(currentIndex / cardsPerRow);
+    const col = currentIndex % cardsPerRow;
+    
+    return {
+        top: row * (cardHeight + gap),
+        left: col * (cardWidth + gap)
+    };
+}
+
+// 创建卡片元素
+function createCardElement(record, companyGroupId) {
+    const processItem = document.createElement('div');
+    processItem.className = 'process-item';
+    processItem.setAttribute('data-company-group-id', companyGroupId);
+    
+    // 这里复用现有的renderCardView中的卡片生成逻辑
+    // 为了简化，我们直接调用现有的渲染逻辑
+    return processItem;
 }
 
 // API基础URL
@@ -238,7 +458,6 @@ function buildCompanyGroupMap() {
 
     currentRecords.forEach(record => {
         const companyGroupId = record.companyGroupId;
-        console.log(record.companyName, record.position, "isPrimary: ", record.isPrimary);
         if (!currentCompanyGroupMap.has(companyGroupId)) {
             currentCompanyGroupMap.set(companyGroupId, []);
         }
@@ -297,161 +516,176 @@ function renderRecords(records = null) {
     }
 }
 
-// 渲染卡片视图
+// 渲染卡片视图（带动画）
 function renderCardView() {
     const container = document.getElementById('processGrid');
-    container.innerHTML = '';
-
+    
     if (currentCompanyGroupMap.size === 0) {
         container.innerHTML = '<div class="col-12 text-center text-muted py-5">暂无记录</div>';
+        cardElements.clear();
         return;
     }
+
+    // 如果正在动画中，跳过重新渲染
+    if (isAnimating) {
+        return;
+    }
+
+    // 清空现有卡片元素映射
+    cardElements.clear();
+    container.innerHTML = '';
 
     // 遍历公司组映射，渲染每个公司组的第一个record
     currentCompanyGroupMap.forEach((records, companyGroupId) => {
         if (records.length === 0) return;
 
-        // 获取第一个record（最新的）
-        const record = records[0];
+        const processItem = createCardElement(records[0], companyGroupId);
+        container.appendChild(processItem);
+        cardElements.set(companyGroupId, processItem);
+    });
+}
 
-        const processItem = document.createElement('div');
-        processItem.className = 'process-item';
+// 创建卡片元素（复用原有逻辑）
+function createCardElement(record, companyGroupId) {
+    const processItem = document.createElement('div');
+    processItem.className = 'process-item';
+    processItem.setAttribute('data-company-group-id', companyGroupId);
 
-        // 最终结果样式
-        let resultClass = '';
-        switch(record.finalResult) {
-            case 'PENDING': resultClass = 'status-pending'; break;
-            case 'OC': resultClass = 'status-oc'; break;
-            case '简历挂':
-            case '测评挂':
-            case '笔试挂':
-            case '面试挂': resultClass = 'status-rejected'; break;
-        }
+    // 获取公司组的所有records
+    const records = currentCompanyGroupMap.get(companyGroupId);
 
-        // 生成流程时间线 - 使用当前岗位的所有信息
-        const timelineData = {
-            ...record, // 基础信息（companyName, baseLocation等）
-            // 从currentPosition获取所有岗位相关信息
-            position: record.currentPosition ? record.currentPosition.position : record.position,
-            finalResult: record.currentPosition ? record.currentPosition.finalResult : record.finalResult,
-            currentStatus: record.currentPosition ? record.currentPosition.currentStatus : record.currentStatus,
-            currentStatusDate: record.currentPosition ? record.currentPosition.currentStatusDate : record.currentStatusDate,
-            // 从currentPosition获取流程时间信息
-            applyTime: record.currentPosition ? record.currentPosition.applyTime : record.applyTime,
-            testTime: record.currentPosition ? record.currentPosition.testTime : record.testTime,
-            writtenExamTime: record.currentPosition ? record.currentPosition.writtenExamTime : record.writtenExamTime,
-            interviews: record.currentPosition ? record.currentPosition.interviews : record.interviews
-        };
-        const timeline = generateTimeline(timelineData);
+    // 最终结果样式
+    let resultClass = '';
+    switch(record.finalResult) {
+        case 'PENDING': resultClass = 'status-pending'; break;
+        case 'OC': resultClass = 'status-oc'; break;
+        case '简历挂':
+        case '测评挂':
+        case '笔试挂':
+        case '面试挂': resultClass = 'status-rejected'; break;
+    }
 
-        // 生成公司名称（如果有URL则作为超链接）
-        const companyNameHtml = record.companyUrl
-            ? `<a href="${record.companyUrl}" target="_blank" class="company-link">${record.companyName}</a>`
-            : record.companyName;
+    // 生成流程时间线
+    const timelineData = {
+        ...record,
+        position: record.currentPosition ? record.currentPosition.position : record.position,
+        finalResult: record.currentPosition ? record.currentPosition.finalResult : record.finalResult,
+        currentStatus: record.currentPosition ? record.currentPosition.currentStatus : record.currentStatus,
+        currentStatusDate: record.currentPosition ? record.currentPosition.currentStatusDate : record.currentStatusDate,
+        applyTime: record.currentPosition ? record.currentPosition.applyTime : record.applyTime,
+        testTime: record.currentPosition ? record.currentPosition.testTime : record.testTime,
+        writtenExamTime: record.currentPosition ? record.currentPosition.writtenExamTime : record.writtenExamTime,
+        interviews: record.currentPosition ? record.currentPosition.interviews : record.interviews
+    };
+    const timeline = generateTimeline(timelineData);
 
-        // 生成岗位选择器（下拉框形式）
-        let positionSelector = '';
+    // 生成公司名称（如果有URL则作为超链接）
+    const companyNameHtml = record.companyUrl
+        ? `<a href="${record.companyUrl}" target="_blank" class="company-link">${record.companyName}</a>`
+        : record.companyName;
 
-        if (records.length > 1) {
-            positionSelector = `
-                <div class="process-info-item">
-                    <span class="process-info-label">岗位</span>
-                    <select class="form-select form-select-sm position-dropdown" 
-                            onchange="switchPosition('${companyGroupId}', this.value)"
-                            style="display: inline-block; width: auto; min-width: 120px;">
-                        ${records.map(r => `
-                            <option value="${r.id}" ${r.id == record.id ? 'selected' : ''}>
-                                ${r.position}
-                            </option>
-                        `).join('')}
-                    </select>
-                </div>
-            `;
-        } else {
-            // 单岗位记录
-            positionSelector = `
-                <div class="process-info-item">
-                    <span class="process-info-label">岗位</span>
-                    <span class="process-info-value">${record.position}</span>
-                </div>
-            `;
-        }
+    // 生成岗位选择器（下拉框形式）
+    let positionSelector = '';
 
-        processItem.innerHTML = `
-            <div class="process-content">
-                <div class="process-header">
-                    <h6 class="process-title">${companyNameHtml}</h6>
-                    <span class="process-status ${resultClass}">${record.finalResult}</span>
-                </div>
-                
-                <div class="process-info">
-                    ${positionSelector}
-                    <div class="process-info-item">
-                        <span class="process-info-label">地点</span>
-                        <span class="process-info-value">${record.baseLocation || '-'}</span>
-                    </div>
-                    <div class="process-info-item">
-                        <span class="process-info-label">泡池时间</span>
-                        <span class="process-info-value">${record.poolDays}天</span>
-                    </div>
-                    ${record.finalResult === 'OC' && record.expectedSalaryType && record.expectedSalaryValue ? `
-                    <div class="process-info-item">
-                        <span class="process-info-label">预期薪资</span>
-                        <span class="process-info-value salary-info">${formatSalary(record.expectedSalaryType, record.expectedSalaryValue)}</span>
-                    </div>
-                    ` : ''}
-                </div>
-                
-                <div class="process-timeline">
-                    <div class="timeline-title">流程进度</div>
-                    <div class="timeline-steps">
-                        ${timeline}
-                    </div>
-                </div>
+    if (records.length > 1) {
+        positionSelector = `
+            <div class="process-info-item">
+                <span class="process-info-label">岗位</span>
+                <select class="form-select form-select-sm position-dropdown" 
+                        onchange="switchPosition('${companyGroupId}', this.value)"
+                        style="display: inline-block; width: auto; min-width: 120px;">
+                    ${records.map(r => `
+                        <option value="${r.id}" ${r.id == record.id ? 'selected' : ''}>
+                            ${r.position}
+                        </option>
+                    `).join('')}
+                </select>
             </div>
-            
-            <div class="process-actions">
-                <button class="btn btn-outline-primary btn-sm" onclick="editCompanyGroup('${companyGroupId}')">
-                    <i class="bi bi-pencil"></i> 编辑
-                </button>
-                <button class="btn btn-outline-danger btn-sm" onclick="deleteCompanyGroup('${companyGroupId}')">
-                    <i class="bi bi-trash"></i> 删除
-                </button>
-            </div>
-            
-            ${record.remarks ? `
-            <div class="remarks-tooltip" id="remarks-${record.id}">
-                <div class="remarks-content">
-                    <strong>备注：</strong>${record.remarks}
-                </div>
-            </div>
-            ` : ''}
         `;
+    } else {
+        // 单岗位记录
+        positionSelector = `
+            <div class="process-info-item">
+                <span class="process-info-label">岗位</span>
+                <span class="process-info-value">${record.position}</span>
+            </div>
+        `;
+    }
 
-        // 添加鼠标悬浮事件监听
-        if (record.remarks) {
-            let hoverTimer;
+    processItem.innerHTML = `
+        <div class="process-content">
+            <div class="process-header">
+                <h6 class="process-title">${companyNameHtml}</h6>
+                <span class="process-status ${resultClass}">${record.finalResult}</span>
+            </div>
+            
+            <div class="process-info">
+                ${positionSelector}
+                <div class="process-info-item">
+                    <span class="process-info-label">地点</span>
+                    <span class="process-info-value">${record.baseLocation || '-'}</span>
+                </div>
+                <div class="process-info-item">
+                    <span class="process-info-label">泡池时间</span>
+                    <span class="process-info-value">${record.poolDays}天</span>
+                </div>
+                ${record.finalResult === 'OC' && record.expectedSalaryType && record.expectedSalaryValue ? `
+                <div class="process-info-item">
+                    <span class="process-info-label">预期薪资</span>
+                    <span class="process-info-value salary-info">${formatSalary(record.expectedSalaryType, record.expectedSalaryValue)}</span>
+                </div>
+                ` : ''}
+            </div>
+            
+            <div class="process-timeline">
+                <div class="timeline-title">流程进度</div>
+                <div class="timeline-steps">
+                    ${timeline}
+                </div>
+            </div>
+        </div>
+        
+        <div class="process-actions">
+            <button class="btn btn-outline-primary btn-sm" onclick="editCompanyGroup('${companyGroupId}')">
+                <i class="bi bi-pencil"></i> 编辑
+            </button>
+            <button class="btn btn-outline-danger btn-sm" onclick="deleteCompanyGroup('${companyGroupId}')">
+                <i class="bi bi-trash"></i> 删除
+            </button>
+        </div>
+        
+        ${record.remarks ? `
+        <div class="remarks-tooltip" id="remarks-${record.id}">
+            <div class="remarks-content">
+                <strong>备注：</strong>${record.remarks}
+            </div>
+        </div>
+        ` : ''}
+    `;
 
-            processItem.addEventListener('mouseenter', function() {
-                hoverTimer = setTimeout(() => {
-                    const tooltip = document.getElementById(`remarks-${record.id}`);
-                    if (tooltip) {
-                        tooltip.style.display = 'block';
-                    }
-                }, 250); // 1秒后显示
-            });
+    // 添加鼠标悬浮事件监听
+    if (record.remarks) {
+        let hoverTimer;
 
-            processItem.addEventListener('mouseleave', function() {
-                clearTimeout(hoverTimer);
+        processItem.addEventListener('mouseenter', function() {
+            hoverTimer = setTimeout(() => {
                 const tooltip = document.getElementById(`remarks-${record.id}`);
                 if (tooltip) {
-                    tooltip.style.display = 'none';
+                    tooltip.style.display = 'block';
                 }
-            });
-        }
+            }, 250);
+        });
 
-        container.appendChild(processItem);
-    });
+        processItem.addEventListener('mouseleave', function() {
+            clearTimeout(hoverTimer);
+            const tooltip = document.getElementById(`remarks-${record.id}`);
+            if (tooltip) {
+                tooltip.style.display = 'none';
+            }
+        });
+    }
+
+    return processItem;
 }
 
 // 渲染列表视图
@@ -1504,7 +1738,7 @@ async function saveModalRecords() {
     }
 }
 
-// 创建模态框中的records（新增模式）
+// 创建模态框中的records（新增模式，带动画）
 async function createModalRecords() {
     const companyName = document.getElementById('companyName').value.trim();
 
@@ -1548,9 +1782,22 @@ async function createModalRecords() {
             }
         }
 
-        // 关闭模态框并刷新数据
+        // 关闭模态框
         bootstrap.Modal.getInstance(document.getElementById('recordModal')).hide();
-        loadRecords();
+        
+        // 重新加载数据
+        await loadRecords();
+        
+        // 为新增的卡片添加飞入动画
+        // 由于loadRecords会重新渲染，我们需要找到新添加的卡片
+        const newCompanyGroupId = modalRecords[0].companyGroupId;
+        if (newCompanyGroupId && cardElements.has(newCompanyGroupId)) {
+            addAnimation({
+                type: 'add',
+                companyGroupId: newCompanyGroupId,
+                data: modalRecords[0]
+            });
+        }
 
     } catch (error) {
         console.error('创建失败:', error);
@@ -1879,7 +2126,7 @@ function createSingleRecord(recordData, token) {
 // 旧的批量创建函数已移除，现在使用公司组管理
 
 
-// 删除公司组
+// 删除公司组（带动画）
 function deleteCompanyGroup(companyGroupId) {
     // 获取公司组的record数组
     const records = currentCompanyGroupMap.get(companyGroupId);
@@ -1895,6 +2142,13 @@ function deleteCompanyGroup(companyGroupId) {
     if (confirm(`确定要删除公司"${companyName}"的所有记录吗？此操作不可撤销！`)) {
         const token = localStorage.getItem('token');
 
+        // 先执行删除动画
+        console.log('准备删除公司组:', companyGroupId, '记录数量:', records.length);
+        addAnimation({
+            type: 'delete',
+            companyGroupId: companyGroupId
+        });
+
         // 删除所有record
         const deletePromises = records.map(record =>
             fetch(`${API_BASE}/records/${record.id}`, {
@@ -1906,20 +2160,34 @@ function deleteCompanyGroup(companyGroupId) {
         );
 
         Promise.all(deletePromises)
-            .then(responses => {
+            .then(async responses => {
                 const allSuccess = responses.every(response => response.ok);
                 if (allSuccess) {
                     // 从映射中移除公司组
                     currentCompanyGroupMap.delete(companyGroupId);
-                    // 重新渲染
-                    renderRecords();
+                    
+                    // 等待删除动画完成后再重新排列
+                    await new Promise(resolve => {
+                        // 等待删除动画完成（500ms + 100ms缓冲）
+                        setTimeout(() => {
+                            addAnimation({
+                                type: 'rearrange',
+                                data: { reason: 'delete' }
+                            });
+                            resolve();
+                        }, 600);
+                    });
                 } else {
                     alert('部分记录删除失败，请检查');
+                    // 如果删除失败，重新渲染
+                    renderRecords();
                 }
             })
             .catch(error => {
                 console.error('删除错误:', error);
                 alert('删除失败，请重试');
+                // 如果删除失败，重新渲染
+                renderRecords();
             });
     }
 }
@@ -2417,14 +2685,19 @@ function switchToOtherPosition(recordId) {
 
 // 旧的多岗位管理函数已移除，现在使用公司组映射管理
 
-// 排序相关函数
+// 排序相关函数（带动画）
 function applySorting() {
     const sortSelect = document.getElementById('sortSelect');
     currentSortType = sortSelect.value;
 
     // 重新构建公司组映射并排序
     buildCompanyGroupMap();
-    renderRecords();
+    
+    // 使用动画重新排列
+    addAnimation({
+        type: 'rearrange',
+        data: { reason: 'sort', sortType: currentSortType }
+    });
 }
 
 // 获取结果优先级（数字越小优先级越高）
