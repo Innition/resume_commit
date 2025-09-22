@@ -2163,9 +2163,8 @@ function deleteCompanyGroup(companyGroupId) {
             .then(async responses => {
                 const allSuccess = responses.every(response => response.ok);
                 if (allSuccess) {
-                    // 从映射中移除公司组
-                    currentCompanyGroupMap.delete(companyGroupId);
-                    
+                    // 从当前显示的记录中移除
+                    currentRecords = currentRecords.filter(r => r.companyGroupId !== companyGroupId);
                     // 等待删除动画完成后再重新排列
                     await new Promise(resolve => {
                         // 等待删除动画完成（500ms + 100ms缓冲）
