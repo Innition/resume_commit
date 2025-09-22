@@ -663,6 +663,43 @@
             position: relative;
         }
 
+        /* 智能重排动画样式 */
+        .process-item.card-smart-move {
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease-in-out;
+            z-index: 10;
+        }
+
+        .process-item.card-smart-add {
+            transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.8s ease-out;
+            z-index: 5;
+        }
+
+        .process-item.card-smart-delete {
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease-in;
+            z-index: 5;
+        }
+
+        /* 暂存区样式 */
+        #cardStagingArea {
+            position: fixed;
+            top: -1000px;
+            left: -1000px;
+            width: 300px;
+            height: 400px;
+            z-index: -1;
+            pointer-events: none;
+            opacity: 0;
+        }
+
+        /* 动画性能优化 */
+        .process-item {
+            will-change: transform, opacity;
+        }
+
+        .process-grid.animating .process-item {
+            will-change: transform, opacity;
+        }
+
     </style>
 </head>
 <body>

@@ -19,6 +19,10 @@ let currentSortType = 'poolDays'; // 当前排序类型，默认为泡池时间
 let isAnimating = false; // 是否正在执行动画
 let animationQueue = []; // 动画队列
 let cardElements = new Map(); // 存储卡片DOM元素引用：key=companyGroupId, value=DOM元素
+let previousCompanyGroupMap = new Map(); // 存储上一次的companyGroupMap状态，用于位置比较
+let cardStagingArea = null; // 卡片暂存区DOM元素
+let lastMousePosition = { x: 0, y: 0 }; // 记录最后鼠标位置
+let pendingNewCards = []; // 等待飞入的新卡片
 
 // 防抖函数
 function debounce(func, wait) {
@@ -34,6 +38,356 @@ function debounce(func, wait) {
 }
 
 // ==================== 动画系统核心函数 ====================
+
+// 初始化卡片暂存区
+function initCardStagingArea() {
+    if (!cardStagingArea) {
+        cardStagingArea = document.createElement('div');
+        cardStagingArea.id = 'cardStagingArea';
+        cardStagingArea.style.cssText = `
+            position: fixed;
+            top: -1000px;
+            left: -1000px;
+            width: 300px;
+            height: 400px;
+            z-index: -1;
+            pointer-events: none;
+            opacity: 0;
+        `;
+        document.body.appendChild(cardStagingArea);
+    }
+}
+
+// 比较两个Map的位置变化，返回位置对照表
+function compareMapPositions(oldMap, newMap) {
+    const oldEntries = [...oldMap.entries()];
+    const newEntries = [...newMap.entries()];
+    
+    // 创建位置对照表：{ oldIndex: newIndex }
+    const positionMap = new Map();
+    const changes = {
+        moved: [], // 移动的卡片 { companyGroupId, oldIndex, newIndex }
+        added: [], // 新增的卡片 { companyGroupId, newIndex }
+        removed: [], // 删除的卡片 { companyGroupId, oldIndex }
+        unchanged: [] // 未变化的卡片 { companyGroupId, index }
+    };
+    
+    // 检查每个新位置的卡片
+    newEntries.forEach(([companyGroupId, records], newIndex) => {
+        const oldIndex = oldEntries.findIndex(([id]) => id === companyGroupId);
+        
+        if (oldIndex === -1) {
+            // 新增的卡片
+            changes.added.push({ companyGroupId, newIndex });
+        } else if (oldIndex !== newIndex) {
+            // 移动的卡片
+            changes.moved.push({ companyGroupId, oldIndex, newIndex });
+            positionMap.set(oldIndex, newIndex);
+        } else {
+            // 未变化的卡片
+            changes.unchanged.push({ companyGroupId, index: newIndex });
+        }
+    });
+    
+    // 检查被删除的卡片
+    oldEntries.forEach(([companyGroupId, records], oldIndex) => {
+        const newIndex = newEntries.findIndex(([id]) => id === companyGroupId);
+        if (newIndex === -1) {
+            changes.removed.push({ companyGroupId, oldIndex });
+        }
+    });
+    
+    return { positionMap, changes };
+}
+
+// 判断是否需要触发重排动画
+function shouldTriggerRearrangeAnimation(changes) {
+    // 如果有新增、删除或移动的卡片，则触发动画
+    return changes.added.length > 0 || 
+           changes.removed.length > 0 || 
+           changes.moved.length > 0;
+}
+
+// 智能重排动画触发
+function triggerSmartRearrangeAnimation(newCompanyGroupMap) {
+    // 初始化暂存区
+    initCardStagingArea();
+    
+    // 比较位置变化
+    const { positionMap, changes } = compareMapPositions(previousCompanyGroupMap, newCompanyGroupMap);
+    
+    console.log('位置变化分析:', changes);
+    console.log('旧顺序:', [...previousCompanyGroupMap.keys()]);
+    console.log('新顺序:', [...newCompanyGroupMap.keys()]);
+    
+    // 判断是否需要动画
+    if (!shouldTriggerRearrangeAnimation(changes)) {
+        console.log('位置无变化，跳过动画');
+        // 更新previousCompanyGroupMap
+        previousCompanyGroupMap = new Map(newCompanyGroupMap);
+        return;
+    }
+    
+    console.log('触发智能重排动画');
+    
+    // 执行智能重排动画
+    executeSmartRearrangeAnimation(changes, positionMap);
+    
+    // 更新previousCompanyGroupMap
+    previousCompanyGroupMap = new Map(newCompanyGroupMap);
+}
+
+// 执行智能重排动画
+async function executeSmartRearrangeAnimation(changes, positionMap) {
+    const container = document.getElementById('processGrid');
+    container.classList.add('animating');
+    
+    try {
+        // 1. 处理删除的卡片
+        for (const { companyGroupId } of changes.removed) {
+            await animateCardDelete(companyGroupId);
+        }
+        
+        // 2. 处理移动的卡片
+        if (changes.moved.length > 0) {
+            await animateCardMoves(changes.moved, positionMap);
+        }
+        
+        // 3. 处理新增的卡片（从暂存区飞入）
+        for (const { companyGroupId } of changes.added) {
+            await animateCardAdd(companyGroupId, null);
+        }
+        
+        // 4. 动画完成后重新排列DOM元素
+        await rearrangeDOMElements();
+        
+        // 5. 处理等待飞入的新卡片（从鼠标位置飞入）
+        await processPendingNewCards();
+        
+    } finally {
+        container.classList.remove('animating');
+    }
+}
+
+// 处理多个卡片移动动画
+async function animateCardMoves(movedCards, positionMap) {
+    const container = document.getElementById('processGrid');
+    const movePromises = [];
+    
+    // 为每个移动的卡片创建动画
+    movedCards.forEach(({ companyGroupId, oldIndex, newIndex }) => {
+        const cardElement = cardElements.get(companyGroupId);
+        if (!cardElement) return;
+        
+        // 计算当前位置和目标位置
+        const currentRect = cardElement.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const targetRect = calculateCardPosition(companyGroupId, newIndex);
+        
+        // 创建移动动画
+        const movePromise = animateSingleCardMove(
+            cardElement, 
+            currentRect, 
+            targetRect, 
+            containerRect
+        );
+        
+        movePromises.push(movePromise);
+    });
+    
+    // 等待所有移动动画完成
+    await Promise.all(movePromises);
+    
+    console.log('所有移动动画完成');
+}
+
+// 单个卡片移动动画
+async function animateSingleCardMove(cardElement, currentRect, targetRect, containerRect) {
+    return new Promise((resolve) => {
+        // 添加移动动画类
+        cardElement.classList.add('card-smart-move');
+        
+        // 计算相对位置
+        const deltaX = targetRect.left - (currentRect.left - containerRect.left);
+        const deltaY = targetRect.top - (currentRect.top - containerRect.top);
+        
+        // 设置变换
+        cardElement.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+        
+        // 动画完成后的清理
+        setTimeout(() => {
+            cardElement.style.transform = '';
+            cardElement.classList.remove('card-smart-move');
+            resolve();
+        }, 500);
+    });
+}
+
+// 重新排列DOM元素
+async function rearrangeDOMElements() {
+    const container = document.getElementById('processGrid');
+    
+    // 按照新的顺序重新排列DOM元素
+    const sortedEntries = [...currentCompanyGroupMap.entries()];
+    sortedEntries.forEach(([companyGroupId, records]) => {
+        const cardElement = cardElements.get(companyGroupId);
+        if (cardElement) {
+            container.appendChild(cardElement);
+        }
+    });
+    
+    console.log('DOM元素重新排列完成');
+}
+
+// 更新记录数据（不重新渲染）
+async function updateRecordsData() {
+    const token = localStorage.getItem('token');
+
+    try {
+        const response = await fetch(`${API_BASE}/records`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            if (data.success) {
+                // 保存当前状态用于比较
+                const oldCompanyGroupMap = new Map(currentCompanyGroupMap);
+                
+                // 更新数据但不重新渲染
+                allRecords = data.data;
+                currentRecords = data.data;
+                buildCompanyGroupMap();
+                
+                // 更新previousCompanyGroupMap用于检测新增卡片
+                previousCompanyGroupMap = oldCompanyGroupMap;
+                
+                console.log('数据已更新，等待动画处理');
+                console.log('旧的公司组数量:', oldCompanyGroupMap.size);
+                console.log('新的公司组数量:', currentCompanyGroupMap.size);
+            } else {
+                console.error('更新记录失败:', data.message);
+            }
+        } else {
+            console.error('更新记录失败:', response.status);
+        }
+    } catch (error) {
+        console.error('更新记录错误:', error);
+    }
+}
+
+// 创建新卡片并定位到鼠标位置（从更新后的数据中）
+async function createNewCardsAtMousePositionFromNewData() {
+    const container = document.getElementById('processGrid');
+    const containerRect = container.getBoundingClientRect();
+    
+    console.log('开始创建新卡片，鼠标位置:', lastMousePosition);
+    console.log('容器位置:', containerRect);
+    
+    // 清空等待列表
+    pendingNewCards = [];
+    
+    // 获取当前公司组映射的键，找出新增的卡片
+    const currentKeys = [...currentCompanyGroupMap.keys()];
+    const previousKeys = [...previousCompanyGroupMap.keys()];
+    const newKeys = currentKeys.filter(key => !previousKeys.includes(key));
+    
+    console.log('当前公司组:', currentKeys);
+    console.log('之前的公司组:', previousKeys);
+    console.log('检测到新增的公司组:', newKeys);
+    
+    // 为每个新增的公司组创建卡片元素
+    for (const companyGroupId of newKeys) {
+        const records = currentCompanyGroupMap.get(companyGroupId);
+        if (!records || records.length === 0) {
+            console.log('跳过空记录组:', companyGroupId);
+            continue;
+        }
+        
+        const record = records[0]; // 使用第一个记录作为代表
+        console.log('为记录创建卡片:', record);
+        
+        // 创建卡片元素
+        const cardElement = createCardElement(record, companyGroupId);
+        container.appendChild(cardElement);
+        cardElements.set(companyGroupId, cardElement);
+        
+        // 定位到鼠标位置
+        const mouseX = lastMousePosition.x - containerRect.left;
+        const mouseY = lastMousePosition.y - containerRect.top;
+        
+        cardElement.style.position = 'absolute';
+        cardElement.style.left = `${mouseX}px`;
+        cardElement.style.top = `${mouseY}px`;
+        cardElement.style.opacity = '0.8';
+        cardElement.style.zIndex = '1000';
+        cardElement.style.pointerEvents = 'none';
+        
+        // 添加到等待列表
+        pendingNewCards.push({ companyGroupId, record });
+        
+        console.log(`创建新卡片 ${companyGroupId} 在鼠标位置 (${mouseX}, ${mouseY})`);
+        console.log('卡片元素:', cardElement);
+    }
+    
+    console.log('等待飞入的卡片数量:', pendingNewCards.length);
+}
+
+// 创建新卡片并定位到鼠标位置（从指定记录中）
+async function createNewCardsAtMousePosition(records) {
+    const container = document.getElementById('processGrid');
+    const containerRect = container.getBoundingClientRect();
+    
+    // 清空等待列表
+    pendingNewCards = [];
+    
+    // 为每个新记录创建卡片元素
+    for (const record of records) {
+        const companyGroupId = record.companyGroupId;
+        if (!companyGroupId) continue;
+        
+        // 创建卡片元素
+        const cardElement = createCardElement(record, companyGroupId);
+        container.appendChild(cardElement);
+        cardElements.set(companyGroupId, cardElement);
+        
+        // 定位到鼠标位置
+        const mouseX = lastMousePosition.x - containerRect.left;
+        const mouseY = lastMousePosition.y - containerRect.top;
+        
+        cardElement.style.position = 'absolute';
+        cardElement.style.left = `${mouseX}px`;
+        cardElement.style.top = `${mouseY}px`;
+        cardElement.style.opacity = '0.8';
+        cardElement.style.zIndex = '1000';
+        cardElement.style.pointerEvents = 'none';
+        
+        // 添加到等待列表
+        pendingNewCards.push({ companyGroupId, record });
+        
+        console.log(`创建新卡片 ${companyGroupId} 在鼠标位置 (${mouseX}, ${mouseY})`);
+    }
+}
+
+// 处理等待飞入的新卡片
+async function processPendingNewCards() {
+    if (pendingNewCards.length === 0) {
+        return;
+    }
+    
+    console.log('处理等待飞入的新卡片:', pendingNewCards.length);
+    
+    // 为每个等待的卡片执行从鼠标位置飞入的动画
+    for (const { companyGroupId, record } of pendingNewCards) {
+        await animateCardAddFromMouse(companyGroupId, record);
+    }
+    
+    // 清空等待列表
+    pendingNewCards = [];
+    console.log('所有等待飞入的卡片处理完成');
+}
 
 // 添加动画到队列
 function addAnimation(animation) {
@@ -90,7 +444,55 @@ async function executeAnimation(animation) {
     }
 }
 
-// 新增卡片动画
+// 新增卡片动画（从鼠标位置飞入）
+async function animateCardAddFromMouse(companyGroupId, record) {
+    const cardElement = cardElements.get(companyGroupId);
+    if (!cardElement) {
+        console.log('未找到卡片元素:', companyGroupId);
+        return;
+    }
+    
+    console.log('开始从鼠标位置新增动画:', companyGroupId);
+    
+    // 获取当前鼠标位置（卡片已经定位在这里）
+    const container = document.getElementById('processGrid');
+    const containerRect = container.getBoundingClientRect();
+    const currentRect = cardElement.getBoundingClientRect();
+    
+    // 计算从当前位置到目标位置的偏移
+    const targetRect = calculateCardPosition(companyGroupId, null);
+    const deltaX = targetRect.left - (currentRect.left - containerRect.left);
+    const deltaY = targetRect.top - (currentRect.top - containerRect.top);
+    
+    // 添加动画类
+    cardElement.classList.add('card-smart-add');
+    
+    // 等待一小段时间让动画类生效
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    // 执行飞入动画
+    cardElement.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+    cardElement.style.opacity = '1';
+    
+    // 等待动画完成
+    await new Promise(resolve => {
+        setTimeout(() => {
+            // 重置样式
+            cardElement.style.position = '';
+            cardElement.style.left = '';
+            cardElement.style.top = '';
+            cardElement.style.transform = '';
+            cardElement.style.opacity = '';
+            cardElement.style.zIndex = '';
+            cardElement.style.pointerEvents = '';
+            cardElement.classList.remove('card-smart-add');
+            console.log('从鼠标位置新增动画完成:', companyGroupId);
+            resolve();
+        }, 800);
+    });
+}
+
+// 新增卡片动画（从暂存区飞入）
 async function animateCardAdd(companyGroupId, record) {
     const cardElement = cardElements.get(companyGroupId);
     if (!cardElement) {
@@ -100,13 +502,34 @@ async function animateCardAdd(companyGroupId, record) {
     
     console.log('开始新增动画:', companyGroupId);
     
-    // 直接添加飞入动画类
-    cardElement.classList.add('card-fly-in');
+    // 设置初始状态（从暂存区位置开始）
+    const container = document.getElementById('processGrid');
+    const containerRect = container.getBoundingClientRect();
+    const stagingRect = cardStagingArea ? cardStagingArea.getBoundingClientRect() : { left: -1000, top: -1000 };
+    
+    // 计算从暂存区到目标位置的偏移
+    const targetRect = calculateCardPosition(companyGroupId, null);
+    const deltaX = targetRect.left - (stagingRect.left - containerRect.left);
+    const deltaY = targetRect.top - (stagingRect.top - containerRect.top);
+    
+    // 设置初始位置（在暂存区）
+    cardElement.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+    cardElement.style.opacity = '0';
+    cardElement.classList.add('card-smart-add');
+    
+    // 等待一小段时间让初始状态生效
+    await new Promise(resolve => setTimeout(resolve, 50));
+    
+    // 执行飞入动画
+    cardElement.style.transform = 'translate(0, 0)';
+    cardElement.style.opacity = '1';
     
     // 等待动画完成
     await new Promise(resolve => {
         setTimeout(() => {
-            cardElement.classList.remove('card-fly-in');
+            cardElement.style.transform = '';
+            cardElement.style.opacity = '';
+            cardElement.classList.remove('card-smart-add');
             console.log('新增动画完成:', companyGroupId);
             resolve();
         }, 800);
@@ -145,7 +568,21 @@ async function animateCardDelete(companyGroupId) {
     
     console.log('开始删除动画:', companyGroupId);
     
-    cardElement.classList.add('card-fly-out');
+    // 计算到暂存区的偏移
+    const container = document.getElementById('processGrid');
+    const containerRect = container.getBoundingClientRect();
+    const stagingRect = cardStagingArea ? cardStagingArea.getBoundingClientRect() : { left: -1000, top: -1000 };
+    const currentRect = cardElement.getBoundingClientRect();
+    
+    const deltaX = (stagingRect.left - containerRect.left) - (currentRect.left - containerRect.left);
+    const deltaY = (stagingRect.top - containerRect.top) - (currentRect.top - containerRect.top);
+    
+    // 添加删除动画类
+    cardElement.classList.add('card-smart-delete');
+    
+    // 设置飞出动画
+    cardElement.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+    cardElement.style.opacity = '0';
     
     await new Promise(resolve => {
         setTimeout(() => {
@@ -157,40 +594,12 @@ async function animateCardDelete(companyGroupId) {
     });
 }
 
-// 重新排列卡片动画
+// 重新排列卡片动画（已弃用，使用智能重排动画）
 async function animateCardRearrange(rearrangeData) {
-    console.log('开始重新排列动画:', rearrangeData);
+    console.log('使用智能重排动画替代旧的重排动画');
     
-    const container = document.getElementById('processGrid');
-    container.classList.add('animating');
-    
-    // 为所有卡片添加重新排列动画类
-    cardElements.forEach(card => {
-        card.classList.add('card-rearrange');
-    });
-    
-    // 等待一小段时间让动画类生效
-    await new Promise(resolve => setTimeout(resolve, 50));
-    
-    // 重新排列DOM元素
-    const sortedEntries = [...currentCompanyGroupMap.entries()];
-    sortedEntries.forEach(([companyGroupId, records]) => {
-        const cardElement = cardElements.get(companyGroupId);
-        if (cardElement) {
-            container.appendChild(cardElement);
-        }
-    });
-    
-    await new Promise(resolve => {
-        setTimeout(() => {
-            cardElements.forEach(card => {
-                card.classList.remove('card-rearrange');
-            });
-            container.classList.remove('animating');
-            console.log('重新排列动画完成');
-            resolve();
-        }, 400);
-    });
+    // 使用新的智能重排动画系统
+    triggerSmartRearrangeAnimation(currentCompanyGroupMap);
 }
 
 // 高亮卡片动画
@@ -266,6 +675,12 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('finalResultFilter').addEventListener('change', applyFilters);
     document.getElementById('currentStatusFilter').addEventListener('change', applyFilters);
     document.getElementById('minSalaryFilter').addEventListener('input', debounce(applyFilters, 500));
+
+    // 跟踪鼠标位置
+    document.addEventListener('mousemove', function(e) {
+        lastMousePosition.x = e.clientX;
+        lastMousePosition.y = e.clientY;
+    });
 
     // 用户岗位偏好已移除，现在使用公司组映射管理
 });
@@ -441,8 +856,13 @@ function loadRecords() {
             if (data.success) {
                 allRecords = data.data; // 保存所有原始记录
                 currentRecords = data.data;
+                
+                // 首次加载时不触发动画，直接渲染
                 buildCompanyGroupMap();
                 renderRecords();
+                
+                // 初始化previousCompanyGroupMap用于后续动画比较
+                previousCompanyGroupMap = new Map(currentCompanyGroupMap);
             } else {
                 console.error('加载记录失败:', data.message);
             }
@@ -454,6 +874,9 @@ function loadRecords() {
 
 // 构建公司组映射
 function buildCompanyGroupMap() {
+    // 保存当前状态用于动画比较
+    const oldCompanyGroupMap = new Map(currentCompanyGroupMap);
+    
     currentCompanyGroupMap.clear();
 
     currentRecords.forEach(record => {
@@ -462,19 +885,16 @@ function buildCompanyGroupMap() {
             currentCompanyGroupMap.set(companyGroupId, []);
         }
 
-
         if(record.isPrimary){
             currentCompanyGroupMap.get(companyGroupId).splice(0, 0, record);
         }
         else{
             currentCompanyGroupMap.get(companyGroupId).push(record);
         }
-
     });
 
     // 对公司组进行排序
     sortRecords();
-
 }
 
 // 切换显示模式
@@ -923,9 +1343,12 @@ function applyFilters() {
     isFiltered = true;
 
     // 使用筛选后的数据重新构建公司组映射
+    const oldCompanyGroupMap = new Map(currentCompanyGroupMap);
     currentRecords = filteredRecords;
     buildCompanyGroupMap();
-    renderRecords();
+    
+    // 使用智能重排动画
+    triggerSmartRearrangeAnimation(currentCompanyGroupMap);
 
     // 显示筛选结果数量
     const resultCount = filteredRecords.length;
@@ -944,9 +1367,12 @@ function clearFilters() {
     filteredRecords = [];
 
     // 恢复原始数据
+    const oldCompanyGroupMap = new Map(currentCompanyGroupMap);
     currentRecords = [...allRecords];
     buildCompanyGroupMap();
-    renderRecords();
+    
+    // 使用智能重排动画
+    triggerSmartRearrangeAnimation(currentCompanyGroupMap);
 
     // 隐藏筛选结果提示
     hideFilterResult();
@@ -1730,7 +2156,12 @@ async function saveModalRecords() {
 
         // 关闭模态框并刷新数据
         bootstrap.Modal.getInstance(document.getElementById('recordModal')).hide();
-        loadRecords();
+        
+        // 更新数据但不重新渲染（避免破坏动画）
+        await updateRecordsData();
+        
+        // 使用智能重排动画
+        triggerSmartRearrangeAnimation(currentCompanyGroupMap);
 
     } catch (error) {
         console.error('保存失败:', error);
@@ -1785,19 +2216,14 @@ async function createModalRecords() {
         // 关闭模态框
         bootstrap.Modal.getInstance(document.getElementById('recordModal')).hide();
         
-        // 重新加载数据
-        await loadRecords();
+        // 更新数据但不重新渲染（避免破坏动画）
+        await updateRecordsData();
         
-        // 为新增的卡片添加飞入动画
-        // 由于loadRecords会重新渲染，我们需要找到新添加的卡片
-        const newCompanyGroupId = modalRecords[0].companyGroupId;
-        if (newCompanyGroupId && cardElements.has(newCompanyGroupId)) {
-            addAnimation({
-                type: 'add',
-                companyGroupId: newCompanyGroupId,
-                data: modalRecords[0]
-            });
-        }
+        // 创建新卡片元素并定位到鼠标位置（使用更新后的数据）
+        await createNewCardsAtMousePositionFromNewData();
+        
+        // 使用智能重排动画处理新增记录
+        triggerSmartRearrangeAnimation(currentCompanyGroupMap);
 
     } catch (error) {
         console.error('创建失败:', error);
@@ -1853,278 +2279,6 @@ async function deleteRecordFromBackend(recordId) {
     }
 }
 
-// 保存公司组
-function saveCompanyGroup(companyGroupId) {
-
-    // 获取公司组的record数组
-    const records = currentCompanyGroupMap.get(companyGroupId);
-    if (!records || records.length === 0) {
-        console.error('未找到公司组记录:', companyGroupId);
-        return;
-    }
-
-    // 收集表单数据
-    const companyName = document.getElementById('companyName').value;
-    const baseLocation = document.getElementById('baseLocation').value || null;
-    const companyUrl = document.getElementById('companyUrl').value || null;
-    const applyTime = document.getElementById('applyTime').value;
-    const testTime = document.getElementById('testTime').value || null;
-    const writtenExamTime = document.getElementById('writtenExamTime').value || null;
-    const currentStatus = document.getElementById('currentStatus').value || null;
-    const currentStatusDate = document.getElementById('currentStatusDate').value || null;
-    const finalResult = document.getElementById('finalResult').value;
-    const expectedSalaryType = document.getElementById('expectedSalaryType').value || null;
-    const expectedSalaryValue = getSalaryValue() || null;
-    const remarks = document.getElementById('remarks').value || null;
-
-    // 收集面试记录
-    const interviews = [];
-    const interviewElements = document.querySelectorAll('#interviewRecords .row');
-    interviewElements.forEach(row => {
-        const type = row.querySelector('select[name="interviewType"]').value;
-        const time = row.querySelector('input[name="interviewTime"]').value;
-        if (time) {
-            interviews.push({
-                interviewType: type,
-                interviewTime: time
-            });
-        }
-    });
-
-    // 获取当前编辑的record
-    const currentRecordId = document.getElementById('recordId').value;
-    const currentRecord = records.find(r => r.id == currentRecordId);
-    if (!currentRecord) {
-        console.error('未找到当前编辑的record:', currentRecordId);
-        return;
-    }
-
-    // 更新当前record的岗位名称
-    const positionInput = document.querySelector('#positionContainer .position-input');
-    const position = positionInput ? positionInput.value.trim() : '';
-    if (!position) {
-        alert('请输入岗位名称');
-        return;
-    }
-
-    // 准备批量保存的数据
-    const updatePromises = records.map(record => {
-        const recordData = {
-            id: record.id,
-            companyName: companyName,
-            position: record.id == currentRecordId ? position : record.position, // 只有当前编辑的record更新岗位名称
-            baseLocation: record.id == currentRecordId ? baseLocation : (record.baseLocation || null),
-            companyUrl: record.id == currentRecordId ? companyUrl : (record.companyUrl || null),
-            applyTime: applyTime,
-            testTime: record.id == currentRecordId ? testTime : (record.testTime || null),
-            writtenExamTime: record.id == currentRecordId ? writtenExamTime : (record.writtenExamTime || null),
-            currentStatus: record.id == currentRecordId ? currentStatus : (record.currentStatus || null), // 只有当前编辑的record更新状态
-            currentStatusDate: record.id == currentRecordId ? currentStatusDate : (record.currentStatusDate || null),
-            finalResult: record.id == currentRecordId ? finalResult : record.finalResult, // 只有当前编辑的record更新结果
-            expectedSalaryType: record.id == currentRecordId ? expectedSalaryType : (record.expectedSalaryType || null),
-            expectedSalaryValue: record.id == currentRecordId ? expectedSalaryValue : (record.expectedSalaryValue || null),
-            remarks: record.id == currentRecordId ? remarks : (record.remarks || null),
-            interviews: record.id == currentRecordId ? interviews : (record.interviews || [])
-        };
-
-        return fetch(`${API_BASE}/records/${record.id}`, {
-            method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
-            },
-            body: JSON.stringify(recordData)
-        });
-    });
-
-    // 执行批量更新
-    Promise.all(updatePromises)
-        .then(responses => {
-            const allSuccess = responses.every(response => response.ok);
-            if (allSuccess) {
-                bootstrap.Modal.getInstance(document.getElementById('recordModal')).hide();
-                loadRecords(); // 重新加载数据
-            } else {
-                alert('部分记录保存失败，请检查');
-            }
-        })
-        .catch(error => {
-            console.error('保存错误:', error);
-            alert('保存失败，请重试');
-        });
-}
-
-// 保存编辑的记录
-function saveEditRecord() {
-    const recordId = document.getElementById('recordId').value;
-    const companyName = document.getElementById('companyName').value;
-    const baseLocation = document.getElementById('baseLocation').value || null;
-    const companyUrl = document.getElementById('companyUrl').value || null;
-    const applyTime = document.getElementById('applyTime').value;
-    const testTime = document.getElementById('testTime').value || null;
-    const writtenExamTime = document.getElementById('writtenExamTime').value || null;
-    const currentStatus = document.getElementById('currentStatus').value || null;
-    const currentStatusDate = document.getElementById('currentStatusDate').value || null;
-    const finalResult = document.getElementById('finalResult').value;
-    const expectedSalaryType = document.getElementById('expectedSalaryType').value || null;
-    const expectedSalaryValue = getSalaryValue() || null;
-    const remarks = document.getElementById('remarks').value || null;
-
-    // 收集面试记录
-    const interviews = [];
-    const interviewElements = document.querySelectorAll('#interviewRecords .row');
-    interviewElements.forEach(row => {
-        const type = row.querySelector('select[name="interviewType"]').value;
-        const time = row.querySelector('input[name="interviewTime"]').value;
-        if (time) {
-            interviews.push({
-                interviewType: type,
-                interviewTime: time
-            });
-        }
-    });
-
-    // 获取岗位名称
-    const positionInput = document.querySelector('#positionContainer .position-input');
-    const position = positionInput ? positionInput.value.trim() : '';
-
-    if (!position) {
-        alert('请输入岗位名称');
-        return;
-    }
-
-
-    const recordData = {
-        id: recordId,
-        companyName: companyName,
-        position: position,
-        baseLocation: baseLocation,
-        companyUrl: companyUrl,
-        applyTime: applyTime,
-        testTime: testTime,
-        writtenExamTime: writtenExamTime,
-        currentStatus: currentStatus,
-        currentStatusDate: currentStatusDate,
-        finalResult: finalResult,
-        expectedSalaryType: expectedSalaryType,
-        expectedSalaryValue: expectedSalaryValue,
-        remarks: remarks,
-        interviews: interviews
-    };
-
-    const token = localStorage.getItem('token');
-
-    fetch(`${API_BASE}/records/${recordId}`, {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(recordData)
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                bootstrap.Modal.getInstance(document.getElementById('recordModal')).hide();
-                loadRecords();
-            } else {
-                alert('保存失败: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('保存错误:', error);
-            alert('保存失败，请重试');
-        });
-}
-
-// 旧的多岗位保存函数已移除，现在使用公司组批量保存
-
-// 保存新记录
-function saveNewRecord() {
-    const positionInput = document.querySelector('#positionContainer .position-input');
-    const position = positionInput ? positionInput.value.trim() : '';
-
-    if (!position) {
-        alert('请输入岗位名称');
-        return;
-    }
-
-    const companyName = document.getElementById('companyName').value;
-    const baseLocation = document.getElementById('baseLocation').value || null;
-    const companyUrl = document.getElementById('companyUrl').value || null;
-    const applyTime = document.getElementById('applyTime').value;
-    const testTime = document.getElementById('testTime').value || null;
-    const writtenExamTime = document.getElementById('writtenExamTime').value || null;
-    const currentStatus = document.getElementById('currentStatus').value || null;
-    const currentStatusDate = document.getElementById('currentStatusDate').value || null;
-    const finalResult = document.getElementById('finalResult').value;
-    const expectedSalaryType = document.getElementById('expectedSalaryType').value || null;
-    const expectedSalaryValue = getSalaryValue() || null;
-    const remarks = document.getElementById('remarks').value || null;
-
-    // 收集面试记录
-    const interviews = [];
-    const interviewElements = document.querySelectorAll('#interviewRecords .row');
-    interviewElements.forEach(row => {
-        const type = row.querySelector('select[name="interviewType"]').value;
-        const time = row.querySelector('input[name="interviewTime"]').value;
-        if (time) {
-            interviews.push({
-                interviewType: type,
-                interviewTime: time
-            });
-        }
-    });
-
-    // 创建单个记录
-    const recordData = {
-        companyName: companyName,
-        position: position,
-        baseLocation: baseLocation,
-        companyUrl: companyUrl,
-        applyTime: applyTime,
-        testTime: testTime,
-        writtenExamTime: writtenExamTime,
-        currentStatus: currentStatus,
-        currentStatusDate: currentStatusDate,
-        finalResult: finalResult,
-        expectedSalaryType: expectedSalaryType,
-        expectedSalaryValue: expectedSalaryValue,
-        remarks: remarks,
-        interviews: interviews
-    };
-
-    const token = localStorage.getItem('token');
-    createSingleRecord(recordData, token);
-}
-
-// 创建单个记录
-function createSingleRecord(recordData, token) {
-    fetch(`${API_BASE}/records`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(recordData)
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                bootstrap.Modal.getInstance(document.getElementById('recordModal')).hide();
-                loadRecords();
-            } else {
-                alert('保存失败: ' + data.message);
-            }
-        })
-        .catch(error => {
-            console.error('保存错误:', error);
-            alert('保存失败，请重试');
-        });
-}
-
-// 旧的批量创建函数已移除，现在使用公司组管理
-
 
 // 删除公司组（带动画）
 function deleteCompanyGroup(companyGroupId) {
@@ -2165,27 +2319,30 @@ function deleteCompanyGroup(companyGroupId) {
                 if (allSuccess) {
                     // 从当前显示的记录中移除
                     currentRecords = currentRecords.filter(r => r.companyGroupId !== companyGroupId);
-                    // 等待删除动画完成后再重新排列
+                    
+                    // 重新构建公司组映射
+                    // const oldCompanyGroupMap = new Map(currentCompanyGroupMap);
+                    // buildCompanyGroupMap();
+                    
+                    // 等待删除动画完成后再触发智能重排
                     await new Promise(resolve => {
-                        // 等待删除动画完成（500ms + 100ms缓冲）
                         setTimeout(() => {
-                            addAnimation({
-                                type: 'rearrange',
-                                data: { reason: 'delete' }
-                            });
+                            triggerSmartRearrangeAnimation(currentCompanyGroupMap);
                             resolve();
                         }, 600);
                     });
                 } else {
                     alert('部分记录删除失败，请检查');
-                    // 如果删除失败，重新渲染
+                    // 如果删除失败，重新渲染（不使用动画）
+                    buildCompanyGroupMap();
                     renderRecords();
                 }
             })
             .catch(error => {
                 console.error('删除错误:', error);
                 alert('删除失败，请重试');
-                // 如果删除失败，重新渲染
+                // 如果删除失败，重新渲染（不使用动画）
+                buildCompanyGroupMap();
                 renderRecords();
             });
     }
@@ -2589,9 +2746,12 @@ async function switchPosition(companyGroupId, recordId) {
                 throw new Error(errorData.message || '保存记录失败');
             }
         }
-        // 重新渲染记录
+        // 重新构建公司组映射
+        const oldCompanyGroupMap = new Map(currentCompanyGroupMap);
         buildCompanyGroupMap();
-        renderRecords();
+        
+        // 使用智能重排动画
+        triggerSmartRearrangeAnimation(currentCompanyGroupMap);
     }catch (error) {
         console.error('保存失败:', error);
         alert('保存失败: ' + error.message);
@@ -2689,14 +2849,14 @@ function applySorting() {
     const sortSelect = document.getElementById('sortSelect');
     currentSortType = sortSelect.value;
 
+    // 保存当前状态
+    const oldCompanyGroupMap = new Map(currentCompanyGroupMap);
+    
     // 重新构建公司组映射并排序
     buildCompanyGroupMap();
     
-    // 使用动画重新排列
-    addAnimation({
-        type: 'rearrange',
-        data: { reason: 'sort', sortType: currentSortType }
-    });
+    // 使用智能重排动画
+    triggerSmartRearrangeAnimation(currentCompanyGroupMap);
 }
 
 // 获取结果优先级（数字越小优先级越高）
