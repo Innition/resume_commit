@@ -1,1181 +1,417 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>简历投递管理系统</title>
-    <link href="css/bootstrap.min.css" rel="stylesheet">
-    <link href="css/bootstrap-icons.css" rel="stylesheet">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>投递记录（Vue 版 Beta）</title>
+    <link rel="stylesheet" href="./css/bootstrap.min.css" />
+    <link rel="stylesheet" href="./css/bootstrap-icons.css" />
     <style>
-        .navbar-brand {
-            font-weight: bold;
-        }
-        .card {
-            box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
-        }
-        .table th {
-            background-color: #f8f9fa;
-        }
-        .btn-sm {
-            padding: 0.25rem 0.5rem;
-            font-size: 0.875rem;
-        }
-        .modal-header {
-            background-color: #f8f9fa;
-        }
-        .form-label {
-            font-weight: 500;
-        }
-        .required {
-            color: red;
-        }
-        .pool-days {
-            font-weight: bold;
-            color: #dc3545;
-        }
-        .status-pending {
-            color: #ffc107;
-        }
-        .status-passed {
-            color: #198754;
-        }
-        .status-rejected {
-            color: #dc3545;
-        }
-        .status-oc {
-            color: #0d6efd;
-        }
-        
-        /* 流程展示样式 */
-        .process-grid {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            padding: 10px 0;
-            align-items: stretch; /* 确保同行元素高度一致 */
-            justify-content: flex-start; /* 靠左排列 */
-        }
-        
-        .process-item {
-            background: #fff;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            transition: transform 0.2s, box-shadow 0.2s;
-            display: flex;
-            flex-direction: column;
-            flex: 0 1 300px; /* 不增长，允许收缩，最小宽度300px */
-            min-height: 0; /* 允许flex子项收缩 */
-            position: relative;
-            max-width: 400px; /* 设置最大宽度，防止过宽 */
-        }
-        
-        .process-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-height: 0; /* 允许内容区域收缩 */
-        }
-        
-        .process-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-        }
-        
-        .process-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-        
-        .process-title {
-            font-weight: 600;
-            font-size: 16px;
-            color: #333;
-            margin: 0;
-        }
-        
-.company-link {
-    color: #0d6efd;
-    text-decoration: none;
-    transition: color 0.2s;
-}
+        body { background: #f7f8fa; }
+        .container { max-width: 1200px; }
+        .process-grid { display: flex; flex-wrap: wrap; gap: 20px; }
+        .process-item { width: 300px; background: #fff; border: 1px solid #eef0f3; border-radius: 10px; padding: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+        .process-title { font-size: 16px; margin: 0; }
+        .status-badge { font-size: 12px; padding: 2px 8px; border-radius: 999px; }
+        .status-oc { background: #e7f7ef; color: #1e8e3e; }
+        .status-pending { background: #eaf3ff; color: #0b57d0; }
+        .status-rejected { background: #fde8e8; color: #b3261e; }
+        .toolbar { display: flex; gap: 8px; align-items: center; }
+        .toolbar .form-control { max-width: 240px; }
 
-.company-link:hover {
-    color: #0a58ca;
-    text-decoration: underline;
-}
+        /* TransitionGroup 动画类（name = card）*/
+        .card-move { transition: transform .5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .card-enter-active, .card-leave-active { transition: all .28s ease; }
+        .card-enter-from, .card-leave-to { opacity: 0; transform: scale(0.98); }
 
-.salary-info {
-    color: #198754;
-    font-weight: 600;
-    background-color: #d1e7dd;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.9em;
-}
-
-.remarks-tooltip {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    z-index: 1000;
-    display: none;
-    margin-top: 5px;
-    pointer-events: none;
-}
-
-.remarks-content {
-    background-color: #333;
-    color: white;
-    padding: 8px 12px;
-    border-radius: 6px;
-    font-size: 13px;
-    line-height: 1.4;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    word-wrap: break-word;
-    max-width: 300px;
-    position: relative;
-}
-
-        .remarks-content::before {
-            content: '';
-            position: absolute;
-            top: -5px;
-            left: 20px;
-            width: 0;
-            height: 0;
-            border-left: 5px solid transparent;
-            border-right: 5px solid transparent;
-            border-bottom: 5px solid #333;
-        }
-        
-        /* 岗位下拉框样式 */
-        .position-dropdown {
-            border: 1px solid #dee2e6;
-            border-radius: 0.375rem;
-            padding: 0.25rem 1.5rem 0.25rem 0.5rem; /* 右侧留出空间给下拉箭头 */
-            font-size: 0.875rem;
-            background-color: #fff;
-            color: #495057;
-            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m1 6 7 7 7-7'/%3e%3c/svg%3e");
-            background-repeat: no-repeat;
-            background-position: right 0.5rem center;
-            background-size: 16px 12px;
-            appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-        }
-        
-        .position-dropdown:focus {
-            border-color: #86b7fe;
-            outline: 0;
-            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
-        }
-        
-        .position-dropdown:hover {
-            border-color: #86b7fe;
-        }
-
-.search-filter-section {
-    background-color: #f8f9fa;
-    padding: 20px;
-    border-radius: 8px;
-    border: 1px solid #e9ecef;
-}
-
-.search-filter-section .form-label {
-    font-weight: 600;
-    color: #495057;
-    margin-bottom: 5px;
-}
-
-.search-filter-section .form-control,
-.search-filter-section .form-select {
-    border: 1px solid #ced4da;
-    border-radius: 6px;
-    transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
-}
-
-.search-filter-section .form-control:focus,
-.search-filter-section .form-select:focus {
-    border-color: #80bdff;
-    outline: 0;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
-}
-        
-        .process-status {
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            font-weight: 500;
-        }
-        
-        .status-oc {
-            background-color: #d1ecf1;
-            color: #0c5460;
-        }
-        
-        .status-pending {
-            background-color: #fff3cd;
-            color: #856404;
-        }
-        
-        .status-rejected {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-        
-        .process-info {
-            margin-bottom: 15px;
-        }
-        
-        .process-info-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 14px;
-        }
-        
-        .process-info-label {
-            color: #6c757d;
-            font-weight: 500;
-        }
-        
-        .process-info-value {
-            color: #333;
-        }
-        
-        .process-timeline {
-            margin-top: 15px;
-            padding-top: 15px;
-            border-top: 1px solid #e9ecef;
-        }
-        
-        .timeline-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 10px;
-        }
-        
-        .timeline-steps {
-            display: flex;
-            align-items: flex-start;
-            gap: 4px;
-            overflow-x: auto;
-            overflow-y: hidden;
-            padding: 5px 0;
-        }
-        
-        .timeline-step {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            position: relative;
-            min-width: 45px;
-            flex-shrink: 0;
-        }
-        
-        .timeline-step:not(:last-child)::after {
-            content: '';
-            position: absolute;
-            top: 12px;
-            left: calc(50% + 12px);
-            width: calc(100% - 24px);
-            height: 2px;
-            background-color: #dee2e6;
-        }
-        
-        .timeline-step.active::after {
-            background-color: #0d6efd;
-        }
-        
-        .timeline-circle {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-            font-weight: 600;
-            margin-bottom: 4px;
-        }
-        
-        .timeline-circle.active {
-            background-color: #0d6efd;
-            color: white;
-        }
-        
-        .timeline-circle.inactive {
-            background-color: #e9ecef;
-            color: #6c757d;
-        }
-        
-        .timeline-label {
-            font-size: 11px;
-            color: #6c757d;
-            text-align: center;
-            line-height: 1.2;
-        }
-        
-        .timeline-date {
-            font-size: 10px;
-            color: #999;
-            margin-top: 2px;
-        }
-        
-        .process-actions {
-            margin-top: auto;
-            padding-top: 15px;
-            display: flex;
-            gap: 8px;
-            flex-shrink: 0; /* 防止按钮区域被压缩 */
-        }
-        
-        .process-actions .btn {
-            flex: 1;
-            font-size: 12px;
-            padding: 6px 12px;
-            cursor: pointer;
-        }
-        /* 1) 全局恢复默认光标，防止有别处写了 * 或 body 的 cursor: ... !important */
-        html, body, * { cursor: auto !important; }
-
-        /* 2) 可点击元素强制小手 */
-        button, .btn, a, [role="button"],
-        select, .form-select, .position-dropdown,
-        .process-actions .btn, .btn-close {
-            cursor: pointer !important;
-        }
-
-        /* 3) 输入控件强制 I-beam */
-        input[type="text"],
-        input[type="password"],
-        input[type="url"],
-        input[type="number"],
-        input[type="datetime-local"],
-        textarea,
-        .form-control {
-            cursor: text !important;
-        }
-
-        /* 4) 禁用态的按钮给出 not-allowed 反馈 */
-        button:disabled, .btn:disabled { cursor: not-allowed !important; }
-        
-        /* 列表模式样式 */
-        .list-view {
-            display: none;
-        }
-        
-        .list-view.active {
-            display: block;
-        }
-        
-        .records-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-        
-        .records-table th,
-        .records-table td {
-            padding: 12px 8px;
-            text-align: left;
-            border-bottom: 1px solid #dee2e6;
-            vertical-align: middle;
-        }
-        
-        .records-table th {
-            background-color: #f8f9fa;
-            font-weight: 600;
-            color: #495057;
-            position: sticky;
-            top: 0;
-            z-index: 10;
-        }
-        
-        .records-table tbody tr:hover {
-            background-color: #f8f9fa;
-        }
-        
-        .records-table .position-selector {
-            min-width: 150px;
-        }
-        
-        .records-table .timeline-compact {
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 200px;
-        }
-        
-        .records-table .status-badge {
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 500;
-        }
-        
-        .records-table .company-link {
-            color: #0d6efd;
-            text-decoration: none;
-        }
-        
-        .records-table .company-link:hover {
-            text-decoration: underline;
-        }
-
-        /* 岗位管理样式 */
-        .position-item {
-            margin-bottom: 8px;
-        }
-
-        .position-item .input-group-text {
-            padding: 0.25rem 0.5rem;
-            background-color: #f8f9fa;
-            border: 1px solid #ced4da;
-        }
-
-        .position-item .btn-group-sm .btn {
-            padding: 0.125rem 0.25rem;
-            font-size: 0.75rem;
-        }
-
-        .position-item .position-input[data-current="true"] {
-            background-color: #e3f2fd;
-            border-color: #2196f3;
-        }
-
-        .position-item .btn:disabled {
-            opacity: 0.6;
-        }
-
-        /* 标签页样式 */
-        .record-tabs {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-bottom: 20px;
-            padding: 8px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
-            border: 1px solid #dee2e6;
-        }
-
-        .record-tabs-container {
-            display: flex;
-            gap: 4px;
-            flex: 1;
-            overflow-x: auto;
-        }
-
-        .record-tab {
-            display: flex;
-            align-items: center;
-            padding: 8px 12px;
-            background-color: #fff;
-            border: 1px solid #dee2e6;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            white-space: nowrap;
-            min-width: 80px;
-            justify-content: center;
-        }
-
-        .record-tab:hover {
-            background-color: #e9ecef;
-            border-color: #adb5bd;
-        }
-
-        .record-tab.active {
-            background-color: #0d6efd;
-            color: white;
-            border-color: #0d6efd;
-        }
-
-        .record-tab.editing {
-            background-color: #fff3cd;
-            border-color: #ffc107;
-        }
-
-        .record-tab-text {
-            flex: 1;
-            text-align: center;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            user-select: none;
-        }
-
-        .record-tab-input {
-            border: none;
-            background: transparent;
-            text-align: center;
-            font-size: 14px;
-            font-weight: 500;
-            width: 100%;
-            outline: none;
-        }
-
-        .record-tab.active .record-tab-input {
-            color: white;
-        }
-
-        .record-tab.editing .record-tab-input {
-            color: #856404;
-        }
-
-        .record-tab-close {
-            margin-left: 8px;
-            padding: 2px 4px;
-            border: none;
-            background: transparent;
-            color: #6c757d;
-            cursor: pointer;
-            border-radius: 3px;
-            font-size: 12px;
-        }
-
-        .record-tab-close:hover {
-            background-color: #dc3545;
-            color: white;
-        }
-
-        .record-tab.active .record-tab-close {
-            color: rgba(255, 255, 255, 0.8);
-        }
-
-        .record-tab.active .record-tab-close:hover {
-            background-color: rgba(255, 255, 255, 0.2);
-            color: white;
-        }
-
-        #addRecordTabBtn {
-            flex-shrink: 0;
-        }
-
-        /* 表单动画容器 */
-        .record-form-container {
-            position: relative;
-            overflow: hidden;
-        }
-
-        .record-form-content {
-            transition: opacity 0.2s ease-in-out;
-        }
-
-        .record-form-content.fade-out {
-            opacity: 0;
-        }
-
-        .record-form-content.fade-in {
-            opacity: 1;
-        }
-
-        /* 卡片飞行动画系统 */
-        .process-item {
-            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-            transform-origin: center;
-        }
-
-        /* 新增动画 */
-        .process-item.card-fly-in {
-            animation: cardFlyIn 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-        }
-
-        @keyframes cardFlyIn {
-            0% {
-                transform: translate(300px, 200px) rotate(15deg) scale(0.3);
-                opacity: 0;
-            }
-            60% {
-                transform: translate(0, 0) rotate(0deg) scale(1.05);
-                opacity: 1;
-            }
-            80% {
-                transform: translate(0, 0) rotate(0deg) scale(0.98);
-            }
-            100% {
-                transform: translate(0, 0) rotate(0deg) scale(1);
-                opacity: 1;
-            }
-        }
-
-        /* 移动动画 */
-        .process-item.card-move {
-            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-            z-index: 10;
-        }
-
-        /* 删除动画 */
-        .process-item.card-fly-out {
-            animation: cardFlyOut 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-            z-index: 5;
-        }
-
-        @keyframes cardFlyOut {
-            0% {
-                transform: scale(1) rotate(0deg);
-                opacity: 1;
-            }
-            50% {
-                transform: scale(0.8) rotate(-5deg);
-                opacity: 0.7;
-            }
-            100% {
-                transform: translate(200px, -100px) scale(0.3) rotate(-15deg);
-                opacity: 0;
-            }
-        }
-
-        /* 重新排列动画 */
-        .process-item.card-rearrange {
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        /* 高亮效果 */
-        .process-item.card-highlight {
-            animation: cardHighlight 0.6s ease-in-out;
-        }
-
-        @keyframes cardHighlight {
-            0%, 100% {
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            50% {
-                box-shadow: 0 8px 25px rgba(13, 110, 253, 0.3);
-                transform: translateY(-4px);
-            }
-        }
-
-        /* 容器动画 */
-        .process-grid.animating {
-            overflow: visible;
-        }
-
-        .process-grid.animating .process-item {
-            position: relative;
-        }
-
-        /* 智能重排动画样式 */
-        .process-item.card-smart-move {
-            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease-in-out;
-            z-index: 10;
-        }
-
-        .process-item.card-smart-add {
-            transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.8s ease-out;
-            z-index: 5;
-        }
-
-        .process-item.card-smart-delete {
-            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.5s ease-in;
-            z-index: 5;
-        }
-
-        /* 暂存区样式 */
-        #cardStagingArea {
-            position: fixed;
-            top: -1000px;
-            left: -1000px;
-            width: 300px;
-            height: 400px;
-            z-index: -1;
-            pointer-events: none;
-            opacity: 0;
-        }
-
-        /* 动画性能优化 */
-        .process-item {
-            will-change: transform, opacity;
-        }
-
-        .process-grid.animating .process-item {
-            will-change: transform, opacity;
-        }
-
+        /* 新增飞入时的过渡（通过 JS 钩子设置 transform 起点，这里提供通用过渡时长） */
+        .card-fly { transition: transform .8s cubic-bezier(0.4, 0, 0.2, 1), opacity .8s ease-out; will-change: transform, opacity; }
     </style>
 </head>
 <body>
-    <!-- 导航栏 -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container-fluid mt-4 px-4">
-            <a class="navbar-brand" href="#">
-                <i class="bi bi-file-earmark-person"></i> 简历投递管理系统
-            </a>
-            <div class="navbar-nav ms-auto d-flex align-items-center">
-                <span class="navbar-text me-3" id="userInfo"></span>
-                <a class="btn btn-outline-light btn-sm me-2" href="logs.html" id="logManagementBtn" style="display: none;">
-                    <i class="bi bi-clipboard-data"></i> 日志管理
-                </a>
-                <button class="btn btn-outline-light btn-sm" onclick="logout()">
-                    <i class="bi bi-box-arrow-right"></i> 退出
-                </button>
-            </div>
-        </div>
-    </nav>
-
-    <!-- 主内容区域 -->
-    <div class="container-fluid mt-12 px-4">
-        <!-- 用户操作区域 -->
-        <div class="row mb-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <div class="d-flex align-items-center">
-                            <h5 class="mb-0 me-3">
-                                <i class="bi bi-list-ul"></i> 投递记录管理
-                            </h5>
-                            <div class="btn-group" role="group" aria-label="显示模式切换">
-                                <button type="button" class="btn btn-outline-secondary btn-sm active" id="cardViewBtn" onclick="switchViewMode('card')" title="卡片模式">
-                                    <i class="bi bi-grid-3x3-gap"></i>
-                                </button>
-                                <button type="button" class="btn btn-outline-secondary btn-sm" id="listViewBtn" onclick="switchViewMode('list')" title="列表模式">
-                                    <i class="bi bi-list"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div>
-                            <button class="btn btn-primary btn-sm me-2" onclick="showAddModal()">
-                                <i class="bi bi-plus-circle"></i> 添加记录
-                            </button>
-                            <button class="btn btn-success btn-sm me-2" onclick="exportData()">
-                                <i class="bi bi-download"></i> 导出数据
-                            </button>
-                            <button class="btn btn-primary btn-sm me-2" onclick="showImportModal()">
-                                <i class="bi bi-upload"></i> 导入数据
-                            </button>
-                            <button class="btn btn-info btn-sm" onclick="generateInviteCode()" id="inviteCodeBtn" style="display: none;">
-                                <i class="bi bi-key"></i> 生成邀请码
-                            </button>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <!-- 搜索和筛选区域 -->
-                        <div class="search-filter-section mb-4">
-                            <div class="row g-3">
-                                <!-- 排序选择 -->
-                                <div class="col-md-1">
-                                    <label for="sortSelect" class="form-label">排序</label>
-                                    <select class="form-select" id="sortSelect" onchange="applySorting()">
-                                        <option value="poolDays" selected>泡池时间</option>
-                                        <option value="updateTime">更新时间</option>
-                                        <option value="applyTime">投递时间</option>
-                                        <option value="createdTime">创建时间</option>
-                                    </select>
-                                </div>
-                                
-                                <!-- 搜索区域 -->
-                                <div class="col-md-4">
-                                    <label for="searchInput" class="form-label">搜索</label>
-                                    <input type="text" class="form-control" id="searchInput" placeholder="搜索公司名称、岗位、地点...">
-                                </div>
-                                
-                                <!-- 最终结果筛选 -->
-                                <div class="col-md-1">
-                                    <label for="finalResultFilter" class="form-label">最终结果</label>
-                                    <select class="form-select" id="finalResultFilter">
-                                        <option value="">全部</option>
+<div id="app" class="py-3">
+    <div class="container">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h5 class="mb-0">投递记录（Vue 版 Beta）</h5>
+            <div class="toolbar">
+                <span v-if="username" class="text-muted small me-2">欢迎，{{ username }}</span>
+                <input v-model.trim="keyword" @keyup.enter="reload" class="form-control form-control-sm" placeholder="搜索公司/岗位/地点" />
+                <select v-model="finalResult" class="form-select form-select-sm" style="width: 120px;">
+                    <option value="">全部结果</option>
                                         <option value="OC">OC</option>
-                                        <option value="待定">待定</option>
+                    <option value="PENDING">PENDING</option>
                                         <option value="已挂">已挂</option>
                                     </select>
-                                </div>
-                                
-                                <!-- 当前状态筛选 -->
-                                <div class="col-md-1">
-                                    <label for="currentStatusFilter" class="form-label">当前状态</label>
-                                    <select class="form-select" id="currentStatusFilter">
-                                        <option value="">全部</option>
-                                        <option value="已投递">已投递</option>
-                                        <option value="已测评">已测评</option>
-                                        <option value="已笔试">已笔试</option>
-                                        <option value="已面试">已面试</option>
+                <select v-model="sortMode" class="form-select form-select-sm" style="width: 140px;">
+                    <option value="priority">按结果优先</option>
+                    <option value="name">按公司名</option>
                                     </select>
-                                </div>
-                                
-                                <!-- 薪资筛选 -->
-                                <div class="col-md-1">
-                                    <label for="minSalaryFilter" class="form-label">最低薪资(w)</label>
-                                    <input type="number" class="form-control" id="minSalaryFilter" placeholder="0" min="0" step="0.1">
-                                </div>
-                                
-                                <!-- 操作按钮 -->
-                                <div class="col-md-2">
-                                    <label class="form-label">&nbsp;</label>
-                                    <div class="d-flex gap-2">
-                                        <button class="btn btn-outline-secondary btn-sm" onclick="clearFilters()">
-                                            <i class="bi bi-x-circle"></i> 清空
-                                        </button>
-                                    </div>
-                                </div>
+                <button class="btn btn-primary btn-sm" @click="reload"><i class="bi bi-search"></i> 查询</button>
+                <button class="btn btn-outline-secondary btn-sm" @click="clearFilters"><i class="bi bi-x-circle"></i> 清空</button>
+                <button class="btn btn-success btn-sm" @click="openAddModal"><i class="bi bi-plus-circle"></i> 新增</button>
+                <button class="btn btn-outline-dark btn-sm" @click="logout" v-if="username"><i class="bi bi-box-arrow-right"></i> 退出</button>
+                <a class="btn btn-outline-secondary btn-sm" href="./index-legacy.html">返回旧版</a>
                             </div>
                         </div>
                         
-                        <!-- 流程展示区域 -->
-                        <div class="process-grid" id="processGrid">
-                            <!-- 流程项目将通过JavaScript动态加载 -->
-                        </div>
-                        
-                        <!-- 列表模式展示区域 -->
-                        <div class="list-view" id="listView">
-                            <div class="table-responsive">
-                                <table class="records-table" id="recordsTable">
-                                    <thead>
-                                        <tr>
-                                            <th>公司名称</th>
-                                            <th>岗位</th>
-                                            <th>地点</th>
-                                            <th>投递时间</th>
-                                            <th>当前状态</th>
-                                            <th>最终结果</th>
-                                            <th>泡池时间</th>
-                                            <th>预期薪资</th>
-                                            <th>流程进度</th>
-                                            <th>备注</th>
-                                            <th>操作</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="recordsTableBody">
-                                        <!-- 记录将通过JavaScript动态加载 -->
-                                    </tbody>
-                                </table>
+        <div v-if="loading" class="text-muted py-4">加载中...</div>
+        <div v-else>
+            <div v-if="groupsSorted.length === 0" class="text-muted py-4">暂无记录</div>
+            <TransitionGroup v-else name="card" tag="div" class="process-grid" :css="false" @enter="enterFromMouse" @after-enter="afterEnter">
+                <div v-for="g in groupsSorted" :key="g.companyGroupId" class="process-item" :data-company-group-id="g.companyGroupId">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="process-title mb-0">{{ g.companyName }}</h6>
+                        <div class="d-flex align-items-center" style="gap:6px;">
+                            <span class="status-badge" :class="statusClass(g.finalResult)">{{ g.finalResult || '-' }}</span>
+                            <button class="btn btn-sm btn-outline-primary" title="编辑" @click="openEditModal(g)" :disabled="!g.id"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-sm btn-outline-danger" title="删除代表记录" @click="deleteRecord(g.id)" :disabled="!g.id"><i class="bi bi-trash"></i></button>
                             </div>
                         </div>
+                    <div class="small text-muted mb-1">岗位：{{ g.position || '-' }}</div>
+                    <div class="small text-muted mb-1">地点：{{ g.baseLocation || '-' }}</div>
+                    <div class="small text-muted">泡池时间：{{ g.poolDays || 0 }} 天</div>
                     </div>
-                </div>
-            </div>
+            </TransitionGroup>
         </div>
     </div>
 
-    <!-- 添加/编辑记录模态框 -->
-    <div class="modal fade" id="recordModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="recordModalTitle">添加投递记录</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="recordForm">
-                        <input type="hidden" id="recordId">
-                        <input type="hidden" id="companyGroupId">
-                        
-                        <!-- 公司名称 -->
-                        <div class="mb-3">
-                            <label for="companyName" class="form-label">公司名称 <span class="required">*</span></label>
-                            <input type="text" class="form-control" id="companyName" required>
-                        </div>
-                        
-                        <!-- 标签页区域 -->
-                        <div class="mb-3">
-                            <div class="record-tabs">
-                                <div class="record-tabs-container" id="recordTabsContainer">
-                                    <!-- 标签页将通过JavaScript动态生成 -->
-                                </div>
-                                <button type="button" class="btn btn-outline-primary btn-sm" id="addRecordTabBtn" onclick="addRecordTab()">
-                                    <i class="bi bi-plus"></i>
-                                </button>
+    <div class="container mt-4">
+        <small class="text-muted">此页面为 Vue3 重构试验版，仅实现基础展示与筛选，后续逐步补齐动画与交互。</small>
                             </div>
                         </div>
                         
-                        <!-- 表单内容区域（支持动画切换） -->
-                        <div class="record-form-container" id="recordFormContainer">
-                            <div class="record-form-content" id="recordFormContent">
+<!-- 简易新增记录模态（纯 Vue 实现） -->
+<div v-if="addModalVisible" style="position: fixed; inset: 0; background: rgba(0,0,0,.35); display: flex; align-items: center; justify-content: center; z-index: 2000;">
+    <div style="width: 520px; max-width: 92vw; background: #fff; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,.2);">
+        <div style="padding: 12px 16px; border-bottom: 1px solid #eef0f3; display: flex; align-items: center; justify-content: space-between;">
+            <strong>新增投递记录</strong>
+            <button class="btn btn-sm btn-outline-secondary" @click="closeAddModal">关闭</button>
+                                    </div>
+        <div style="padding: 16px;">
+            <div class="mb-3">
+                <label class="form-label">公司名称</label>
+                <input class="form-control" v-model.trim="newRecord.companyName" placeholder="必填" />
+                                    </div>
+            <div class="mb-3">
+                <label class="form-label">岗位</label>
+                <input class="form-control" v-model.trim="newRecord.position" placeholder="必填" />
+                                </div>
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
-                                        <label for="position" class="form-label">投递岗位 <span class="required">*</span></label>
-                                        <input type="text" class="form-control" id="position" required>
+                    <label class="form-label">Base 地点</label>
+                    <input class="form-control" v-model.trim="newRecord.baseLocation" />
                                     </div>
                                     <div class="col-md-6 mb-3">
-                                        <label for="baseLocation" class="form-label">Base地点</label>
-                                        <input type="text" class="form-control" id="baseLocation">
+                    <label class="form-label">投递时间</label>
+                    <input type="datetime-local" class="form-control" v-model="newRecord.applyTime" />
                                     </div>
                                 </div>
-                                
-                                <div class="row">
-                                    <div class="col-md-6 mb-3">
-                                        <label for="companyUrl" class="form-label">公司招聘网站链接</label>
-                                        <input type="url" class="form-control" id="companyUrl">
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="applyTime" class="form-label">投递时间 <span class="required">*</span></label>
-                                        <input type="datetime-local" class="form-control" id="applyTime" required>
-                                    </div>
-                                </div>
-                                
-                                <div class="row">
-                                    <div class="col-md-4 mb-3">
-                                        <label for="testTime" class="form-label">测评时间</label>
-                                        <input type="datetime-local" class="form-control" id="testTime">
-                                    </div>
-                                    <div class="col-md-4 mb-3">
-                                        <label for="writtenExamTime" class="form-label">笔试时间</label>
-                                        <input type="datetime-local" class="form-control" id="writtenExamTime">
-                                    </div>
-                                    <div class="col-md-4 mb-3">
-                                        <label for="currentStatus" class="form-label">当前状态</label>
-                                        <select class="form-select" id="currentStatus" onchange="handleCurrentStatusChange()">
-                                            <option value="">请选择当前状态</option>
-                                            <option value="已投递">已投递</option>
-                                            <option value="已测评">已测评</option>
-                                            <option value="已笔试">已笔试</option>
-                                            <option value="已面试">已面试</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                
-                                <div class="row">
-                                    <div class="col-md-6 mb-3" id="currentStatusDateSection" style="display: none;">
-                                        <label for="currentStatusDate" class="form-label">当前状态日期</label>
-                                        <div class="input-group">
-                                            <input type="datetime-local" class="form-control" id="currentStatusDate">
-                                            <button class="btn btn-outline-danger" type="button" id="clearCurrentStatusBtn" onclick="clearCurrentStatus()" style="display: none;">
-                                                <i class="bi bi-x"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="finalResult" class="form-label">最终结果</label>
-                                        <select class="form-select" id="finalResult" onchange="handleFinalResultChange()">
-                                            <option value="PENDING">待定</option>
-                                            <option value="简历挂">简历挂</option>
-                                            <option value="测评挂">测评挂</option>
-                                            <option value="笔试挂">笔试挂</option>
-                                            <option value="面试挂">面试挂</option>
-                                            <option value="OC">OC</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                
-                                <!-- 面试记录区域 -->
-                                <div class="mb-3">
-                                    <label class="form-label">面试记录</label>
-                                    <div id="interviewRecords">
-                                        <!-- 面试记录将通过JavaScript动态添加 -->
-                                    </div>
-                                    <button type="button" class="btn btn-outline-primary btn-sm" onclick="addInterviewRecord()">
-                                        <i class="bi bi-plus"></i> 添加面试记录
-                                    </button>
-                                </div>
-                                
-                                <div class="row">
-                                    <div class="col-md-6 mb-3" id="salarySection" style="display: none;">
-                                        <label class="form-label">预期薪资</label>
-                                        <div class="row">
-                                            <div class="col-4">
-                                                <select class="form-select" id="expectedSalaryType" onchange="handleSalaryTypeChange()">
-                                                    <option value="总包">总包</option>
-                                                    <option value="月薪">月薪</option>
-                                                    <option value="待商议">待商议</option>
-                                                </select>
-                                            </div>
-                                            <div class="col-8" id="salaryValueContainer">
-                                                <input type="text" class="form-control" id="expectedSalaryValue" placeholder="请输入薪资">
-                                            </div>
-                                        </div>
-                                        <div class="row mt-2" id="monthlySalaryContainer" style="display: none;">
-                                            <div class="col-6">
-                                                <input type="number" class="form-control" id="monthlySalary" placeholder="月薪" min="0" step="0.1">
-                                            </div>
-                                            <div class="col-6">
-                                                <input type="number" class="form-control" id="monthlyCount" placeholder="月数" min="1" max="24" value="12">
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6 mb-3">
-                                        <label for="remarks" class="form-label">备注</label>
-                                        <textarea class="form-control" id="remarks" rows="3"></textarea>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </form>
+            <div class="row">
+                <div class="col-md-6 mb-3">
+                    <label class="form-label">结果</label>
+                    <select class="form-select" v-model="newRecord.finalResult">
+                        <option value="PENDING">PENDING</option>
+                        <option value="OC">OC</option>
+                        <option value="已挂">已挂</option>
+                    </select>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-danger" id="deleteRecordBtn" onclick="deleteCurrentRecord()" style="display: none;">
-                        <i class="bi bi-trash"></i> 删除当前记录
-                    </button>
-                    <div class="ms-auto">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                        <button type="button" class="btn btn-primary" onclick="saveRecord()">保存</button>
-                    </div>
-                </div>
+            </div>
+            <div class="mb-3">
+                <label class="form-label">备注</label>
+                <textarea class="form-control" rows="3" v-model.trim="newRecord.remarks" placeholder="可选"></textarea>
+            </div>
+            <div class="text-end">
+                <button class="btn btn-secondary me-2" @click="closeAddModal">取消</button>
+                <button class="btn btn-primary" @click="saveNewRecord" :disabled="savingNew">{{ savingNew ? '保存中...' : '保存' }}</button>
             </div>
         </div>
     </div>
 
-    <!-- 邀请码模态框 -->
-    <div class="modal fade" id="inviteCodeModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">邀请码</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i> 邀请码已生成，有效期为1天
-                    </div>
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="generatedInviteCode" readonly>
-                        <button class="btn btn-outline-secondary" type="button" onclick="copyInviteCode()">
-                            <i class="bi bi-clipboard"></i> 复制
-                        </button>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">确定</button>
-                </div>
-            </div>
-        </div>
     </div>
 
-    <!-- 导入数据模态框 -->
-    <div class="modal fade" id="importModal" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">导入Excel数据</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">选择Excel文件</label>
-                        <input type="file" class="form-control" id="importFile" accept=".xlsx,.xls">
-                        <div class="form-text">请选择符合导出格式的Excel文件</div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label">导入模式</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="importMode" id="importModeAdd" value="add" checked>
-                            <label class="form-check-label" for="importModeAdd">
-                                <strong>新增模式</strong> - 仅添加新记录，不修改现有数据
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="importMode" id="importModeReplace" value="replace">
-                            <label class="form-check-label" for="importModeReplace">
-                                <strong>替换模式</strong> - 删除所有现有数据，用导入数据完全替换
-                            </label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="importMode" id="importModeSkip" value="skip">
-                            <label class="form-check-label" for="importModeSkip">
-                                <strong>跳过模式</strong> - 新增记录，但跳过公司和岗位都相同的记录
-                            </label>
-                        </div>
-                    </div>
-                    
-                    <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-triangle"></i>
-                        <strong>注意事项：</strong>
-                        <ul class="mb-0 mt-2">
-                            <li>Excel文件必须包含：公司名称、岗位、地点、投递时间等必要字段</li>
-                            <li>时间格式应为：YYYY-MM-DD HH:mm:ss</li>
-                            <li>最终结果字段：PENDING、OC、简历挂、测评挂、笔试挂、面试挂</li>
-                            <li>当前状态字段：已投递、已测评、已笔试、已面试</li>
-                        </ul>
-                    </div>
-                    
-                    <div id="importPreview" class="mt-3" style="display: none;">
-                        <h6>数据预览</h6>
-                        <div class="table-responsive" style="max-height: 300px;">
-                            <table class="table table-sm table-bordered">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>公司名称</th>
-                                        <th>岗位</th>
-                                        <th>地点</th>
-                                        <th>投递时间</th>
-                                        <th>最终结果</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="importPreviewBody">
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-info" onclick="previewImportData()" id="previewBtn">预览数据</button>
-                    <button type="button" class="btn btn-primary" onclick="confirmImport()" id="confirmImportBtn" disabled>确认导入</button>
-                </div>
-            </div>
-        </div>
-    </div>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script>
+    const API_BASE = '';
 
-    <!-- 登录模态框 -->
-    <div class="modal fade" id="loginModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">用户登录</h5>
-                </div>
-                <div class="modal-body">
-                    <form id="loginForm">
-                        <div class="mb-3">
-                            <label for="loginUsername" class="form-label">用户名</label>
-                            <input type="text" class="form-control" id="loginUsername" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="loginPassword" class="form-label">密码</label>
-                            <input type="password" class="form-control" id="loginPassword" required>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" onclick="login()">登录</button>
-                    <button type="button" class="btn btn-link" onclick="showRegisterModal()">没有账户？注册</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    function getAuthHeaders() {
+        const token = localStorage.getItem('token');
+        return token ? { 'Authorization': 'Bearer ' + token } : {};
+    }
 
-    <!-- 注册模态框 -->
-    <div class="modal fade" id="registerModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">用户注册</h5>
-                </div>
-                <div class="modal-body">
-                    <form id="registerForm">
-                        <div class="mb-3">
-                            <label for="registerUsername" class="form-label">用户名</label>
-                            <input type="text" class="form-control" id="registerUsername" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="registerPassword" class="form-label">密码</label>
-                            <input type="password" class="form-control" id="registerPassword" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="registerEmail" class="form-label">邮箱</label>
-                            <input type="email" class="form-control" id="registerEmail">
-                        </div>
-                        <div class="mb-3">
-                            <label for="inviteCode" class="form-label">邀请码</label>
-                            <input type="text" class="form-control" id="inviteCode" required>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-primary" onclick="register()">注册</button>
-                    <button type="button" class="btn btn-link" onclick="showLoginModal()">已有账户？登录</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    function groupRecords(records) {
+        const map = new Map();
+        for (const r of records) {
+            if (!map.has(r.companyGroupId)) map.set(r.companyGroupId, []);
+            const list = map.get(r.companyGroupId);
+            if (r.isPrimary) list.splice(0, 0, r); else list.push(r);
+        }
+        // 取每组第一条用于卡片展示
+        const groups = [];
+        for (const [companyGroupId, list] of map.entries()) {
+            const top = list[0] || {};
+            groups.push({
+                companyGroupId,
+                id: top.id,
+                companyName: top.companyName,
+                position: top.position,
+                baseLocation: top.baseLocation,
+                poolDays: top.poolDays,
+                finalResult: top.finalResult
+            });
+        }
+        return groups;
+    }
 
-    <script src="js/bootstrap.bundle.min.js"></script>
-    <script src="js/app.js"></script>
+    Vue.createApp({
+        data() {
+            return {
+                loading: false,
+                keyword: '',
+                finalResult: '',
+                allRecords: [],
+                groups: [],
+                sortMode: 'priority',
+                // 动画：记录上次鼠标位置与本次新增分组
+                lastMouse: { x: 0, y: 0 },
+                addedIds: new Set(),
+                username: '',
+                addModalVisible: false,
+                savingNew: false,
+                newRecord: {
+                    companyName: '',
+                    position: '',
+                    baseLocation: '',
+                    applyTime: '',
+                    finalResult: 'PENDING',
+                    remarks: ''
+                }
+            };
+        },
+        mounted() {
+            // 跟踪鼠标
+            document.addEventListener('mousemove', (e) => {
+                this.lastMouse.x = e.clientX;
+                this.lastMouse.y = e.clientY;
+            });
+            // 简单鉴权：若无 token，提示并跳登录页（可根据实际路由调整）
+            const token = localStorage.getItem('token');
+            if (!token) {
+                console.warn('未检测到登录 token');
+            } else {
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1] || '')) || {};
+                    this.username = payload.sub || '';
+                } catch {}
+            }
+            this.reload();
+        },
+        computed: {
+            groupsSorted() {
+                const arr = [...this.groups];
+                if (this.sortMode === 'name') {
+                    return arr.sort((a, b) => (a.companyName || '').localeCompare(b.companyName || ''));
+                }
+                const getPriority = (r) => {
+                    if (!r) return 999;
+                    switch (r) {
+                        case 'OC': return 1;
+                        case 'PENDING': return 2;
+                        default: return (String(r).includes('挂') ? 3 : 4);
+                    }
+                };
+                return arr.sort((a, b) => {
+                    const pa = getPriority(a.finalResult);
+                    const pb = getPriority(b.finalResult);
+                    if (pa !== pb) return pa - pb;
+                    return (a.poolDays || 0) - (b.poolDays || 0);
+                });
+            }
+        },
+        methods: {
+            statusClass(result) {
+                if (result === 'OC') return 'status-oc';
+                if (result === 'PENDING') return 'status-pending';
+                if (result && result.includes('挂')) return 'status-rejected';
+                return '';
+            },
+            async reload() {
+                this.loading = true;
+                try {
+                    const res = await fetch(`${API_BASE}/records`, { headers: getAuthHeaders() });
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.message || '加载失败');
+                    let records = data.data || [];
+                    // 简易前端筛选（与现有逻辑保持基础一致）
+                    if (this.keyword) {
+                        const kws = this.keyword.split(/[,，]/).map(k => k.trim()).filter(Boolean);
+                        records = records.filter(r => kws.some(kw =>
+                            (r.companyName || '').toLowerCase().includes(kw.toLowerCase()) ||
+                            (r.position || '').toLowerCase().includes(kw.toLowerCase()) ||
+                            (r.baseLocation || '').toLowerCase().includes(kw.toLowerCase())
+                        ));
+                    }
+                    if (this.finalResult) {
+                        if (this.finalResult === '已挂') {
+                            records = records.filter(r => (r.finalResult || '').includes('挂'));
+                        } else {
+                            records = records.filter(r => (r.finalResult || '') === this.finalResult);
+                        }
+                    }
+                    // 计算新增分组ID集合
+                    const prevIds = new Set(this.groups.map(g => g.companyGroupId));
+                    const nextGroups = groupRecords(records);
+                    const nextIds = new Set(nextGroups.map(g => g.companyGroupId));
+                    const added = [];
+                    nextIds.forEach(id => { if (!prevIds.has(id)) added.push(id); });
+                    this.addedIds = new Set(added);
+
+                    this.allRecords = records;
+                    this.groups = nextGroups;
+                } catch (e) {
+                    console.error(e);
+                    this.groups = [];
+                    alert('数据加载失败，请检查登录状态或网络后重试');
+                } finally {
+                    this.loading = false;
+                }
+            },
+            clearFilters() {
+                this.keyword = '';
+                this.finalResult = '';
+                this.sortMode = 'priority';
+                this.reload();
+            },
+            logout() {
+                localStorage.removeItem('token');
+                this.username = '';
+                alert('已退出登录');
+            },
+            openEditModal(group) {
+                if (!group || !group.id) return;
+                this.newRecord = {
+                    companyName: group.companyName || '',
+                    position: group.position || '',
+                    baseLocation: group.baseLocation || '',
+                    applyTime: ''
+                };
+                this.editingId = group.id;
+                this.addModalVisible = true;
+            },
+            openAddModal() {
+                this.newRecord = { companyName: '', position: '', baseLocation: '', applyTime: '', finalResult: 'PENDING', remarks: '' };
+                this.editingId = null;
+                this.addModalVisible = true;
+            },
+            closeAddModal() {
+                if (!this.savingNew) this.addModalVisible = false;
+            },
+            async saveNewRecord() {
+                if (!this.newRecord.companyName || !this.newRecord.position) {
+                    alert('请填写公司名称与岗位');
+                    return;
+                }
+                this.savingNew = true;
+                try {
+                    const body = {
+                        companyName: this.newRecord.companyName,
+                        position: this.newRecord.position,
+                        baseLocation: this.newRecord.baseLocation || null,
+                        companyUrl: null,
+                        applyTime: this.newRecord.applyTime || new Date().toISOString(),
+                        testTime: null,
+                        writtenExamTime: null,
+                        currentStatus: null,
+                        currentStatusDate: null,
+                        finalResult: this.newRecord.finalResult || 'PENDING',
+                        expectedSalaryType: null,
+                        expectedSalaryValue: null,
+                        remarks: this.newRecord.remarks || null,
+                        interviews: []
+                    };
+                    const isEdit = !!this.editingId;
+                    const url = isEdit ? `${API_BASE}/records/${this.editingId}` : `${API_BASE}/records`;
+                    const method = isEdit ? 'PUT' : 'POST';
+                    const res = await fetch(url, {
+                        method,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...getAuthHeaders()
+                        },
+                        body: JSON.stringify(body)
+                    });
+                    if (!res.ok) throw new Error('创建失败');
+                    await this.reload();
+                    this.addModalVisible = false;
+                } catch (e) {
+                    console.error(e);
+                    alert('保存失败，请稍后再试');
+                } finally {
+                    this.savingNew = false;
+                }
+            },
+            async deleteRecord(id) {
+                if (!id) return;
+                if (!confirm('确认删除该记录？此操作不可撤销')) return;
+                try {
+                    const res = await fetch(`${API_BASE}/records/${id}`, {
+                        method: 'DELETE',
+                        headers: getAuthHeaders()
+                    });
+                    if (!res.ok) throw new Error('删除失败');
+                    await this.reload();
+                } catch (e) {
+                    console.error(e);
+                    alert('删除失败，请稍后再试');
+                }
+            },
+            // 自定义进入过渡：对新增的卡片从鼠标位置飞入
+            // el 为 .process-item 根元素；通过 this.addedIds 判断是否为新增
+            enterFromMouse(el, done) {
+                const id = el.getAttribute('data-company-group-id') || '';
+                const isAdded = this.addedIds.has(id);
+                if (!isAdded) {
+                    el.classList.add('card-fly');
+                    el.style.opacity = '0';
+                    requestAnimationFrame(() => {
+                        el.style.opacity = '1';
+                        el.style.transform = 'translate(0, 0)';
+                        const onEnd = () => { el.classList.remove('card-fly'); el.removeEventListener('transitionend', onEnd); done(); };
+                        el.addEventListener('transitionend', onEnd);
+                    });
+                    return;
+                }
+
+                const grid = this.$el.querySelector('.process-grid');
+                const gridRect = grid ? grid.getBoundingClientRect() : { left: 0, top: 0 };
+                const finalRect = el.getBoundingClientRect();
+                const targetX = finalRect.left - gridRect.left;
+                const targetY = finalRect.top - gridRect.top;
+                const startX = this.lastMouse.x - gridRect.left;
+                const startY = this.lastMouse.y - gridRect.top;
+                const deltaX = startX - targetX;
+                const deltaY = startY - targetY;
+
+                el.classList.add('card-fly');
+                el.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+                el.style.opacity = '0.8';
+                requestAnimationFrame(() => {
+                    el.style.transform = 'translate(0, 0)';
+                    el.style.opacity = '1';
+                    const onEnd = () => {
+                        el.classList.remove('card-fly');
+                        el.removeEventListener('transitionend', onEnd);
+                        done();
+                    };
+                    el.addEventListener('transitionend', onEnd);
+                });
+            },
+            afterEnter(el) {
+                el.style.transform = '';
+                el.style.opacity = '';
+            }
+        }
+    }).mount('#app');
+</script>
 </body>
 </html>
+
