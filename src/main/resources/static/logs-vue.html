@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>日志中心（Vue 版 Beta）</title>
+    <link rel="stylesheet" href="./css/bootstrap.min.css" />
+    <link rel="stylesheet" href="./css/bootstrap-icons.css" />
+    <style>
+        body { background: #f7f8fa; }
+        .container { max-width: 1200px; }
+        .toolbar { display: flex; gap: 8px; align-items: center; }
+        .toolbar .form-control { max-width: 200px; }
+        .log-card { background: #fff; border: 1px solid #eef0f3; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+        .badge-pill { border-radius: 999px; }
+    </style>
+</head>
+<body>
+<div id="app" class="py-3">
+    <div class="container">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h5 class="mb-0">日志中心（Vue 版 Beta）</h5>
+            <div class="toolbar">
+                <select v-model="type" class="form-select form-select-sm" style="width: 140px;">
+                    <option value="system">系统日志</option>
+                    <option value="access">访问日志</option>
+                    <option value="security">安全日志</option>
+                    <option value="error">错误日志</option>
+                </select>
+                <input v-model.trim="keyword" @keyup.enter="reload" class="form-control form-control-sm" placeholder="关键词" />
+                <button class="btn btn-primary btn-sm" @click="reload"><i class="bi bi-search"></i> 查询</button>
+                <a class="btn btn-outline-secondary btn-sm" href="./logs.html">返回旧版</a>
+            </div>
+        </div>
+
+        <div v-if="loading" class="text-muted py-4">加载中...</div>
+        <div v-else>
+            <div v-if="logs.length === 0" class="text-muted py-4">暂无日志</div>
+            <div v-else>
+                <div v-for="log in logs" :key="log.id || (log.timestamp + '-' + log.level)" class="log-card">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <span class="badge bg-secondary badge-pill me-2">{{ log.level || '-' }}</span>
+                            <strong>{{ log.title || log.message || '-' }}</strong>
+                        </div>
+                        <small class="text-muted">{{ formatDateTime(log.timestamp) }}</small>
+                    </div>
+                    <div class="mt-1 small text-muted" v-if="log.detail">{{ log.detail }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="container mt-4">
+        <small class="text-muted">此页面为 Vue3 重构试验版，仅实现基础筛选与展示，后续补齐分页与高级筛选。</small>
+    </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script>
+const API_BASE = '';
+
+function getAuthHeaders() {
+    const token = localStorage.getItem('token');
+    return token ? { 'Authorization': 'Bearer ' + token } : {};
+}
+
+async function fetchLogs(type) {
+    // 旧版有多个接口，这里先用一个统一的占位接口，后续细分：/logs/system ...
+    const map = {
+        system: '/logs/system',
+        access: '/logs/access',
+        security: '/logs/security',
+        error: '/logs/error'
+    };
+    const url = (API_BASE || '') + (map[type] || '/logs/system');
+    const res = await fetch(url, { headers: getAuthHeaders() });
+    if (!res.ok) throw new Error('加载日志失败');
+    // 兼容旧返回格式 {success,data}
+    const data = await res.json().catch(() => ({}));
+    return data.data || data.list || [];
+}
+
+Vue.createApp({
+    data() {
+        return { loading: false, type: 'system', keyword: '', logs: [] };
+    },
+    mounted() { this.reload(); },
+    methods: {
+        formatDateTime(s) {
+            if (!s) return '-';
+            try { return new Date(s).toLocaleString('zh-CN'); } catch { return String(s); }
+        },
+        async reload() {
+            this.loading = true;
+            try {
+                let list = await fetchLogs(this.type);
+                if (this.keyword) {
+                    const kw = this.keyword.toLowerCase();
+                    list = list.filter(l => JSON.stringify(l).toLowerCase().includes(kw));
+                }
+                this.logs = list;
+            } catch (e) {
+                console.error(e);
+                this.logs = [];
+            } finally {
+                this.loading = false;
+            }
+        }
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
+
+
